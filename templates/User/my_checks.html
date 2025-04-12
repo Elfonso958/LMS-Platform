@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}My Completed Checks{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <h1 class="mb-4">My Completed Checks</h1>
+
+  <!-- Table for displaying only completed checks -->
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>Check Name</th>
+        <th>Aircraft Type</th>
+        <th>Date of Test</th>
+        <th>Test Result</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for check_meta in crew_checks_meta %}
+        <tr>
+          <td>{{ check_meta.check.name }}</td>
+          <td>{{ check_meta.aircraft_type }}</td>
+          <td>{{ check_meta.date_of_test }}</td>
+          <td>{{ check_meta.test_result }}</td>
+          <td>
+            <a href="{{ url_for('view_my_crew_check', meta_id=check_meta.id) }}" 
+               class="btn btn-info btn-sm">
+               View Form
+            </a>
+          </td>          
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if not crew_checks_meta %}
+    <p class="text-muted">You have no completed checks.</p>
+  {% endif %}
+</div>
+{% endblock %}

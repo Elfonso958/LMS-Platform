@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .report-container {
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+    }
+    .report-container h1 {
+        text-align: center;
+        color: #333;
+    }
+    .chart-container {
+        width: 80%;
+        margin: 0 auto;
+    }
+    .chart-title {
+        font-size: 1.5em;
+        font-weight: bold;
+        color: #4CAF50;
+        text-align: center;
+        margin-top: 20px;
+    }
+    .chart-container canvas {
+        background-color: #f9f9f9;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 10px;
+    }
+</style>
+
+<div class="report-container">
+    <h1>Average Check Items Scores</h1>
+    
+    <form method="POST" action="{{ url_for('Crew_Checks_Report') }}">
+        <div class="form-group">
+            <label for="check_type_id">Select Check Type:</label>
+            <select name="check_type_id" id="check_type_id" class="form-control" onchange="this.form.submit()">
+                <option value="">-- Select Check Type --</option>
+                {% for check_type in check_types %}
+                <option value="{{ check_type.id }}" {% if selected_check_type_id == check_type.id %}selected{% endif %}>{{ check_type.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+
+    {% if selected_check_type_id %}
+    <div id="charts"></div>
+    {% endif %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const rawData = {{ Crew_Checks_data|tojson }};
+        const groupedCharts = {};
+
+        rawData.forEach(item => {
+            const formName = item.form_name || "Unnamed Form";
+            const aircraftType = item.aircraft_type && item.aircraft_type.trim() !== "" ? item.aircraft_type : null;
+            const chartTitle = aircraftType ? `${formName} – ${aircraftType}` : formName;
+
+            if (!groupedCharts[chartTitle]) {
+                groupedCharts[chartTitle] = {
+                    labels: [],
+                    data: []
+                };
+            }
+
+            groupedCharts[chartTitle].labels.push(item.item_name);
+            groupedCharts[chartTitle].data.push(item.average_grade);
+        });
+
+        const chartsContainer = document.getElementById('charts');
+        Object.entries(groupedCharts).forEach(([title, chartData]) => {
+            const chartContainer = document.createElement('div');
+            chartContainer.className = 'chart-container';
+
+            const chartTitle = document.createElement('div');
+            chartTitle.className = 'chart-title';
+            chartTitle.innerText = title;
+            chartContainer.appendChild(chartTitle);
+
+            const canvas = document.createElement('canvas');
+            chartContainer.appendChild(canvas);
+            chartsContainer.appendChild(chartContainer);
+
+            const ctx = canvas.getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [{
+                        label: 'Average Grade',
+                        data: chartData.data,
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Average Grade'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Check Items'
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    });
+</script>
+
+
+{% endblock %}

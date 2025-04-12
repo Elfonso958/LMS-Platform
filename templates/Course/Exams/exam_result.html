@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Exam Result</h1>
+    <p>Course: {{ course.title }}</p>
+    <p>Score: {{ attempt.score }}%</p>
+    <p>Status: {{ "Passed" if attempt.passed else "Failed" }}</p>
+
+    {% if attempt.passed %}
+    <a href="{{ url_for('view_certificate', attempt_id=attempt.id) }}" class="btn btn-primary">View Certificate</a>
+    <a href="{{ url_for('download_certificate', attempt_id=attempt.id) }}" class="btn btn-secondary">Download Certificate</a>
+    {% else %}
+    <a href="{{ url_for('view_course', course_id=course.id) }}" class="btn btn-warning">Start Course Again</a>
+    {% endif %}
+</div>
+{% endblock %}

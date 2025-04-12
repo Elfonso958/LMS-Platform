@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Exam Attempt Details</h1>
+
+    <p><strong>Course:</strong> {{ attempt.course.title }}</p>
+    <p><strong>Date Taken:</strong> {{ attempt.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+    <p><strong>Score:</strong> {{ attempt.score }}%</p>
+    <p><strong>Passed:</strong> {% if attempt.passed %}Yes{% else %}No{% endif %}</p>
+
+    <hr>
+
+    <h3>Questions & Answers</h3>
+    {% for item in detailed_answers %}
+        <div class="mb-4">
+            <h5>{{ loop.index }}. {{ item.question.text }}</h5>
+            {% for answer in item.answers %}
+                <div class="d-flex align-items-center">
+                    <!-- Highlight the user's answer -->
+                    {% if item.user_answer_id == answer.id %}
+                        <span class="badge {% if item.is_correct %}bg-success{% else %}bg-danger{% endif %} me-2">
+                            Your Answer
+                        </span>
+                    {% endif %}
+                    <p class="{% if answer.is_correct %}fw-bold text-success{% endif %}">{{ answer.text }}</p>
+                </div>
+            {% endfor %}
+        </div>
+    {% endfor %}
+
+    <a href="{{ url_for('my_exam_attempts') }}" class="btn btn-secondary">Back to My Attempts</a>
+</div>
+{% endblock %}

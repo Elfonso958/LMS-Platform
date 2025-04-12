@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% block title %}Manage Navbar Access{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="mb-4">Navbar Access Control</h2>
+
+    <!-- 🟩 Modal Trigger -->
+    <button class="btn btn-outline-primary mb-4" data-bs-toggle="modal" data-bs-target="#navItemModal">➕ Add / Edit Nav Item</button>
+
+<!-- 🟦 Accordion and Permissions -->
+<form method="POST" action="{{ url_for('manage_navbar') }}">
+    <div class="accordion" id="navbarAccordion">
+        <div id="sortable-headers">
+            {% for nav_item in nav_items %}
+            <div class="accordion-item mb-3 border" data-id="{{ nav_item.id }}">
+                <h2 class="accordion-header" id="heading{{ nav_item.id }}">
+                    <div class="accordion-button collapsed d-flex justify-content-between align-items-center"
+                         data-bs-toggle="collapse"
+                         data-bs-target="#collapse{{ nav_item.id }}"
+                         aria-expanded="false"
+                         aria-controls="collapse{{ nav_item.id }}">
+                        <span>
+                            ☰ <strong>{{ nav_item.label }}</strong>
+                            {% if nav_item.endpoint %}<small class="text-muted">({{ nav_item.endpoint }})</small>{% endif %}
+                        </span>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                onclick="editItem({{ nav_item.id }}, '{{ nav_item.label }}', '{{ nav_item.endpoint or '' }}', '')">
+                                ✏️ Edit
+                            </button>
+                            {% if not nav_item.children %}
+                            <form method="POST" action="{{ url_for('delete_nav_item') }}" onsubmit="return confirm('Are you sure you want to delete this header?')">
+                                <input type="hidden" name="nav_item_id" value="{{ nav_item.id }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">🗑️ Delete</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </h2>
+                <div id="collapse{{ nav_item.id }}" class="accordion-collapse collapse">
+                    <div class="accordion-body">
+                        <!-- Role Access -->
+                        <h6 class="mb-3 text-primary">Header Access</h6>
+                        <details>
+                            <summary class="mb-2 text-muted">Toggle Role Access</summary>
+                            <div class="row g-2 px-2 mb-3" style="max-height: 300px; overflow-y: auto;">
+                                {% for role in all_roles %}
+                                <div class="col-md-4 col-lg-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input role-checkbox"
+                                               type="checkbox"
+                                               data-nav-id="{{ nav_item.id }}"
+                                               data-role-id="{{ role.roleID }}"
+                                               {% if role.roleID in nav_item.allowed_role_ids or (role.roleID == -1 and current_user.is_admin) %}checked{% endif %}
+                                               {% if role.roleID == -1 %}disabled{% endif %}>
+                                        <label class="form-check-label small">
+                                            {{ role.role_name }}{% if role.roleID == -1 %} <small class="text-muted">(automatic)</small>{% endif %}
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </details>
+
+                        {% if nav_item.children %}
+                        <hr>
+                        <h6 class="mb-3 text-secondary">Child Links</h6>
+                        <div class="sortable-children sortable-children-{{ nav_item.id }}">
+                            {% for child in nav_item.children %}
+                            <div class="mb-3 p-3 border rounded" data-id="{{ child.id }}">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div>
+                                        ☰ <strong>{{ child.label }}</strong>
+                                        <small class="text-muted d-block">Endpoint: {{ child.endpoint }}</small>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                            onclick="editItem({{ child.id }}, '{{ child.label }}', '{{ child.endpoint or '' }}', '{{ nav_item.id }}')">
+                                            ✏️ Edit
+                                        </button>
+                                        <div class="form-check">
+                                            <input class="form-check-input inherit-toggle" type="checkbox" name="inherit_roles_{{ child.id }}" id="inherit-{{ child.id }}"
+                                                   {% if child.inherit_roles %}checked{% endif %}>
+                                            <label class="form-check-label small" for="inherit-{{ child.id }}">
+                                                Inherit parent roles
+                                            </label>
+                                        </div>
+                                        <form method="POST" action="{{ url_for('delete_nav_item') }}" onsubmit="return confirm('Delete this child link?')">
+                                            <input type="hidden" name="nav_item_id" value="{{ child.id }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">🗑️ Delete</button>
+                                        </form>
+                                    </div>
+                                </div>
+                                <div class="child-role-permissions" id="roles-for-{{ child.id }}" {% if child.inherit_roles %}style="display: none;"{% endif %}>
+                                    <details>
+                                        <summary class="text-muted">Toggle Child Role Access</summary>
+                                        <div class="row g-2 px-2 mt-2" style="max-height: 250px; overflow-y: auto;">
+                                            {% for role in all_roles %}
+                                            <div class="col-md-4 col-lg-3">
+                                                <div class="form-check">
+                                                    <input class="form-check-input role-checkbox"
+                                                           type="checkbox"
+                                                           data-nav-id="{{ child.id }}"
+                                                           data-role-id="{{ role.roleID }}"
+                                                           {% if role.roleID in child.allowed_role_ids or (role.roleID == -1 and current_user.is_admin) %}checked{% endif %}
+                                                           {% if role.roleID == -1 %}disabled{% endif %}>
+                                                    <label class="form-check-label small">
+                                                        {{ role.role_name }}{% if role.roleID == -1 %} <small class="text-muted">(automatic)</small>{% endif %}
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </details>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</form>
+</div>
+
+<!-- 🟨 Modal -->
+<div class="modal fade" id="navItemModal" tabindex="-1" aria-labelledby="navItemModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('manage_navbar') }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="navItemModalLabel">Add / Edit Nav Item</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="nav-id">
+                    <input type="hidden" name="nav_action" value="save_nav">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label">Label</label>
+                            <input type="text" name="label" id="nav-label" class="form-control" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Endpoint (optional)</label>
+                            <input type="text" name="endpoint" id="nav-endpoint" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Parent (for child links)</label>
+                            <select name="parent_id" id="nav-parent" class="form-select">
+                                <option value="">None (Header)</option>
+                                {% for header in all_headers %}
+                                    <option value="{{ header.id }}">{{ header.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Nav Item</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+function editItem(id, label, endpoint, parentId) {
+    document.getElementById('nav-id').value = id;
+    document.getElementById('nav-label').value = label;
+    document.getElementById('nav-endpoint').value = endpoint;
+    document.getElementById('nav-parent').value = parentId;
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('navItemModal'));
+    modal.show();
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+    new Sortable(document.getElementById('sortable-headers'), {
+        animation: 150,
+        handle: '.accordion-button',
+        onEnd: saveOrder
+    });
+
+    document.querySelectorAll(".sortable-children").forEach(container => {
+        new Sortable(container, {
+            animation: 150,
+            onEnd: saveOrder
+        });
+    });
+
+    document.querySelectorAll('.role-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function () {
+            const navItemId = this.dataset.navId;
+            const roleId = this.dataset.roleId;
+            const action = this.checked ? 'add' : 'remove';
+
+            fetch("{{ url_for('update_nav_permission_ajax') }}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token() if csrf_token is defined else '' }}"
+                },
+                body: JSON.stringify({ nav_item_id: navItemId, role_id: roleId, action: action })
+            });
+        });
+    });
+});
+
+function saveOrder() {
+    const headers = [...document.querySelectorAll("#sortable-headers > .accordion-item")].map((el, i) => ({
+        id: el.getAttribute('data-id'),
+        position: i
+    }));
+
+    const children = {};
+    document.querySelectorAll(".sortable-children").forEach(container => {
+        const group = [];
+        container.querySelectorAll("[data-id]").forEach((el, i) => {
+            group.push({
+                id: el.getAttribute('data-id'),
+                position: i
+            });
+        });
+        const parentId = container.classList[1].split("-").pop();
+        children[parentId] = group;
+    });
+
+    fetch("{{ url_for('reorder_nav_items') }}", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": "{{ csrf_token() if csrf_token is defined else '' }}"
+        },
+        body: JSON.stringify({ headers, children })
+    });
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+    // Inherit toggle checkbox AJAX
+    document.querySelectorAll(".inherit-toggle").forEach(toggle => {
+        toggle.addEventListener("change", function () {
+            const childId = this.id.replace("inherit-", "");
+            const isChecked = this.checked;
+
+            // Hide or show role permissions UI
+            const roleBlock = document.getElementById("roles-for-" + childId);
+            if (roleBlock) {
+                roleBlock.style.display = isChecked ? "none" : "block";
+            }
+
+            // Instant DB update
+            fetch("{{ url_for('toggle_inherit_roles') }}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token() if csrf_token is defined else '' }}"
+                },
+                body: JSON.stringify({ child_id: childId, inherit: isChecked })
+            }).then(res => {
+                if (!res.ok) alert("⚠️ Failed to update inherit setting.");
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

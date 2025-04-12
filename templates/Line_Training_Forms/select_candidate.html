@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Select Candidate{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4">Select Candidate</h1>
+    <p>Creating a Line Training Form from Template: <strong>{{ template.name }}</strong></p>
+    <form method="POST">
+        <div class="form-group">
+            <label for="candidate_id">Select Candidate</label>
+            <select name="candidate_id" id="candidate_id" class="form-control" required>
+                {% for candidate in candidates %}
+                <option value="{{ candidate.id }}">{{ candidate.username }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary mt-3">Create Line Training Form</button>
+    </form>
+</div>
+{% endblock %}

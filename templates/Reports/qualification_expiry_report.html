@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .report-container {
+        font-family: Arial, sans-serif;
+        font-size: 10px; /* Smaller font size */
+    }
+    .report-container h1, .report-container h2 {
+        text-align: center;
+        color: #333;
+    }
+    .report-container table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+    }
+    .report-container th, .report-container td {
+        border: 1px solid #ddd;
+        padding: 2px; /* Smaller padding for smaller rows */
+        text-align: left;
+    }
+    .report-container th {
+        background-color: #f2f2f2;
+        color: #333;
+    }
+    .report-container tr:nth-child(even) {
+        background-color: #f9f9f9;
+    }
+    .report-container tr:hover {
+        background-color: #f1f1f1;
+    }
+    .report-container .section {
+        margin-bottom: 20px; /* Smaller margin for sections */
+    }
+    .print-button {
+        display: block;
+        width: 200px;
+        margin: 20px auto;
+        padding: 10px;
+        background-color: #4CAF50;
+        color: white;
+        text-align: center;
+        text-decoration: none;
+        border-radius: 5px;
+    }
+    .print-button:hover {
+        background-color: #45a049;
+    }
+    @media print {
+        .print-button, header {
+            display: none;
+        }
+        .timestamp {
+            display: block;
+            text-align: right;
+            margin-bottom: 10px;
+            font-size: 10px;
+            color: #666;
+        }
+    }
+</style>
+
+<div class="report-container">
+    <h1>Qualification Expiry Reports</h1>
+    
+    <div class="timestamp">
+        Printed on: {{ current_time }}
+    </div>
+    
+    <div class="section">
+        <h2>Expired</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 20%;">User</th>
+                    <th style="width: 20%;">Days Remaining</th>
+                    <th style="width: 20%;">Qualification</th>
+                    <th style="width: 20%;">Expiry Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user, qualification in report_data['expired'] %}
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ (qualification.valid_to.date() - today).days }}</td>
+                    <td>{{ qualification.qualification }}</td>
+                    <td>{{ qualification.valid_to.date() }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>0-30 Days Remaining</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 20%;">User</th>
+                    <th style="width: 20%;">Days Remaining</th>
+                    <th style="width: 20%;">Qualification</th>
+                    <th style="width: 20%;">Expiry Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user, qualification in report_data['0-30'] %}
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ (qualification.valid_to.date() - today).days }}</td>
+                    <td>{{ qualification.qualification }}</td>
+                    <td>{{ qualification.valid_to.date() }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>30-60 Days Remaining</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 20%;">User</th>
+                    <th style="width: 20%;">Days Remaining</th>
+                    <th style="width: 20%;">Qualification</th>
+                    <th style="width: 20%;">Expiry Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user, qualification in report_data['30-60'] %}
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ (qualification.valid_to.date() - today).days }}</td>
+                    <td>{{ qualification.qualification }}</td>
+                    <td>{{ qualification.valid_to.date() }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h2>60-90 Days Remaining</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 20%;">User</th>
+                    <th style="width: 20%;">Days Remaining</th>
+                    <th style="width: 20%;">Qualification</th>
+                    <th style="width: 20%;">Expiry Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user, qualification in report_data['60-90'] %}
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ (qualification.valid_to.date() - today).days }}</td>
+                    <td>{{ qualification.qualification }}</td>
+                    <td>{{ qualification.valid_to.date() }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <a href="#" class="print-button" onclick="window.print()">Print Report</a>
+</div>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Edit Course</h1>
+    <form method="POST" action="{{ url_for('edit_course', course_id=course.id) }}">
+        <div class="mb-3">
+            <label for="title" class="form-label">Course Title</label>
+            <input type="text" class="form-control" id="title" name="title" value="{{ course.title }}" required>
+        </div>
+        <div class="mb-3">
+            <label for="description" class="form-label">Description</label>
+            <textarea class="form-control" id="description" name="description" required>{{ course.description }}</textarea>
+        </div>
+        <div class="mb-3">
+            <label for="role_type_ids" class="form-label">Assign to Roles</label>
+            <select class="form-select" id="role_type_ids" name="role_type_ids" multiple>
+                {% for role in roles %}
+                <option value="{{ role.roleID }}" {% if role in course.roles %}selected{% endif %}>
+                    {{ role.role_name }}
+                </option>
+                {% endfor %}
+            </select>
+            <small class="form-text text-muted">Hold Ctrl (Cmd on Mac) to select multiple roles.</small>
+        </div>
+        <div class="mb-3">
+            <label for="passing_mark" class="form-label">Passing Mark (%)</label>
+            <input type="number" class="form-control" id="passing_mark" name="passing_mark" min="0" max="100" value="{{ course.passing_mark }}" required>
+        </div>
+        <div class="mb-3">
+            <label for="valid_for_days" class="form-label">Course Validity (Days)</label>
+            <input type="number" class="form-control" id="valid_for_days" name="valid_for_days" min="1" value="{{ course.valid_for_days if course else 365 }}" required>
+        </div>
+        <div class="form-group">
+            <label for="available_before_expiry_days">Avaliable Before (days):</label>
+            <input type="number" class="form-control" id="available_before_expiry_days" name="available_before_expiry_days" min="0" value="{{ course.available_before_expiry_days }}" required>
+        </div>
+        <!-- Has Exam -->
+        <div class="col-md-6 mb-3">
+            <div class="form-check mt-4">
+                <input class="form-check-input" type="checkbox" id="has_exam" name="has_exam" value="1" {% if course.has_exam %}checked{% endif %}>
+                <label class="form-check-label" for="has_exam">This course includes an exam</label>
+            </div>
+        </div>
+    </div>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+    </form>
+</div>
+{% endblock %}

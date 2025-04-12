@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+  <div class="card shadow">
+    <div class="card-header bg-info text-white">
+      <h3 class="mb-0">🛫 Crew Flight Acknowledgements</h3>
+    </div>
+    <div class="card-body">
+
+      <!-- ✅ Success and Error Alerts -->
+      <div id="ackSuccess" class="alert alert-success d-none" role="alert">
+        ✅ Flight acknowledged successfully.
+      </div>
+      <div id="ackError" class="alert alert-danger d-none" role="alert">
+        ❌ Something went wrong.
+      </div>
+
+      {% if acknowledgements %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle">
+            <thead class="table-dark">
+              <tr>
+                <th>Flight</th>
+                <th>Date</th>
+                <th>From → To</th>
+                <th>ETD → ETA</th>
+                <th>Aircraft</th>
+                <th>Status</th>
+                <th>Acknowledge</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ack in acknowledgements %}
+              <tr>
+                <!-- Flight -->
+                <td {% if ack.originalFlightNumber and ack.originalFlightNumber != ack.flight.flightNumberDescription %} style="background-color: yellow;" {% endif %}>
+                  <strong>{{ ack.flight.flightNumberDescription }}</strong>
+                  {% if ack.originalFlightNumber and ack.originalFlightNumber != ack.flight.flightNumberDescription %}
+                  <br><small class="text-muted">(was {{ ack.originalFlightNumber }})</small>
+                  {% endif %}
+                </td>
+
+                <!-- Date -->
+                <td>{{ ack.flight.flightDate.strftime('%d %b %Y') if ack.flight.flightDate else '—' }}</td>
+
+                <!-- From → To -->
+                <td {% if ack.originalFrom != ack.flight.departurePlaceDescription or ack.originalTo != ack.flight.arrivalPlaceDescription %} style="background-color: yellow;" {% endif %}>
+                  <strong>{{ ack.flight.departurePlaceDescription }} → {{ ack.flight.arrivalPlaceDescription }}</strong>
+                  {% if ack.originalFrom != ack.flight.departurePlaceDescription or ack.originalTo != ack.flight.arrivalPlaceDescription %}
+                  <br><small class="text-muted">(was {{ ack.originalFrom or '—' }} → {{ ack.originalTo or '—' }})</small>
+                  {% endif %}
+                </td>
+
+                <!-- ETD → ETA -->
+                <td {% if ack.originalDeparture_nz != ack.departureScheduled_nz or ack.originalArrival_nz != ack.arrivalScheduled_nz %} style="background-color: yellow;" {% endif %}>
+                  <strong>{{ ack.departureScheduled_nz.strftime('%H:%M') if ack.departureScheduled_nz else '—' }} → {{ ack.arrivalScheduled_nz.strftime('%H:%M') if ack.arrivalScheduled_nz else '—' }}</strong>
+                  {% if ack.originalDeparture_nz != ack.departureScheduled_nz or ack.originalArrival_nz != ack.arrivalScheduled_nz %}
+                  <br><small class="text-muted">(was {{ ack.originalDeparture_nz.strftime('%H:%M') if ack.originalDeparture_nz else '—' }} → {{ ack.originalArrival_nz.strftime('%H:%M') if ack.originalArrival_nz else '—' }})</small>
+                  {% endif %}
+                </td>
+
+                <!-- Aircraft -->
+                <td {% if ack.originalAircraft and ack.originalAircraft != ack.flight.flightRegistrationDescription %} style="background-color: yellow;" {% endif %}>
+                  <strong>{{ ack.flight.flightRegistrationDescription or '—' }}</strong>
+                  {% if ack.originalAircraft and ack.originalAircraft != ack.flight.flightRegistrationDescription %}
+                  <br><small class="text-muted">(was {{ ack.originalAircraft }})</small>
+                  {% endif %}
+                </td>
+
+                <!-- Status -->
+                <td>
+                  {% if ack.acknowledged %}
+                    ✅ Acknowledged on {{ ack.acknowledged_at.strftime('%d %b %Y %H:%M') }}
+                  {% else %}
+                    ❌ Pending
+                  {% endif %}
+                </td>
+
+                <!-- Acknowledge -->
+                <td>
+                  {% if not ack.acknowledged %}
+                  <button class="btn btn-sm btn-success" onclick="acknowledgeFlight({{ ack.id }})">Acknowledge</button>
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-muted">No flight changes pending acknowledgement.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+function acknowledgeFlight(ackId) {
+  fetch(`/acknowledge_flight?ack_id=${ackId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      document.getElementById("ackSuccess").classList.remove("d-none");
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      document.getElementById("ackError").textContent = `❌ ${data.message}`;
+      document.getElementById("ackError").classList.remove("d-none");
+    }
+  })
+  .catch(err => {
+    console.error("❌ Error:", err);
+    document.getElementById("ackError").textContent = "❌ An unexpected error occurred.";
+    document.getElementById("ackError").classList.remove("d-none");
+  });
+}
+</script>
+{% endblock %}

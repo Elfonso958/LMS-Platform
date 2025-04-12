@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Check Item{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4">Edit Check Item</h1>
+    <form action="{{ url_for('edit_check_item', check_id=check.id, item_id=item.id) }}" method="POST">
+        <div class="mb-3">
+            <label for="item_name" class="form-label">Item Name</label>
+            <input type="text" class="form-control" id="item_name" name="item_name" value="{{ item.item_name }}" required>
+        </div>
+        <div class="form-check mb-3">
+            <input type="checkbox" class="form-check-input" id="mandatory" name="mandatory" {% if item.mandatory %}checked{% endif %}>
+            <label class="form-check-label" for="mandatory">Mandatory</label>
+        </div>
+        <div class="mb-3">
+            <label for="manual_link" class="form-label">Manual Link</label>
+            <input type="text" class="form-control" id="manual_link" name="manual_link" value="{{ item.manual_link }}">
+        </div>
+        <button type="submit" class="btn btn-primary">Update Item</button>
+    </form>
+    
+</div>
+{% endblock %}

@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}Crew Checks Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4 text-center">🛠️ Crew Checks Dashboard</h1>
+
+    <!-- Create New Forms (Only for Training Team) -->
+    <div class="text-center mb-4">
+        {% if "Training Team" in current_user.roles|map(attribute="role_name") %}
+            <a href="{{ url_for('create_crew_check') }}" class="btn btn-success mx-2">➕ Create New Crew Check</a>
+            <a href="{{ url_for('create_line_training_form') }}" class="btn btn-success mx-2">➕ Create New Training Form</a>
+        {% endif %}
+    </div>
+
+    <!-- Crew Checks Section -->
+    <h2 class="mt-4 text-primary">📋 Graded Crew Checks</h2>
+    <div class="row">
+        {% for check in crew_checks %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">{{ check.name }}</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">🕒 Created: {{ check.created_at.strftime('%Y-%m-%d %H:%M:%S') if check.created_at else 'N/A' }}</p>
+                    <p>🏷 Roles Assigned: 
+                        {% for role in check.roles %}
+                            <span class="badge bg-info">{{ role.role_name }}</span>
+                        {% endfor %}
+                    </p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{{ url_for('crew_check_form', crew_check_id=check.id) }}" class="btn btn-primary btn-sm w-100">👀 View</a>
+                        
+                        {% if "Training Team" in current_user.roles|map(attribute="role_name") %}
+                            <a href="{{ url_for('add_check_item', check_id=check.id) }}" class="btn btn-secondary btn-sm w-100">➕ Add Item</a>
+                            <button class="btn btn-warning btn-sm w-100"
+                            onclick='openEditModal(
+                              {{ check.id }},
+                              "{{ check.name }}",
+                              {{ check.roles | map(attribute="roleID") | list }},
+                              {{ check.visible_headers if check.visible_headers else "[]" | safe }}
+                            )'>
+                            ✏️ Edit
+                            </button>                            
+                            <form action="{{ url_for('delete_crew_check', crew_check_id=check.id) }}" method="POST" class="w-100">
+                                <button type="submit" class="btn btn-danger btn-sm w-100" onclick="return confirm('Are you sure?')">
+                                    ❌ Delete
+                                </button>
+                            </form>
+                        {% endif %}
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- No Crew Checks Message -->
+    {% if not crew_checks %}
+        <p class="text-muted text-center">No crew checks found.</p>
+    {% endif %}
+
+    <!-- Line Training Forms Section -->
+    <h2 class="mt-4 text-success">🎓 Line Training Forms</h2>
+    <div class="row">
+        {% for form in line_training_forms %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">{{ form.name }}</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">🕒 Created: {{ form.created_at.strftime('%Y-%m-%d %H:%M:%S') if form.created_at else 'N/A' }}</p>
+                    <p>🏷 Roles Assigned:
+                        {% for role in form.roles %}
+                            <span class="badge bg-info">{{ role.role_name }}</span>
+                        {% endfor %}
+                    </p>
+                    <div class="d-flex flex-wrap gap-2">
+                        
+                        
+                        {% if "Training Team" in current_user.roles|map(attribute="role_name") %}
+                            <a href="{{ url_for('edit_line_training_form', form_id=form.id) }}" class="btn btn-warning btn-sm w-100">✏️ Edit</a>
+                            <a href="{{ url_for('create_active_line_training_form', template_id=form.id) }}" class="btn btn-success btn-sm w-100">📝 Create New Line Training Form</a>
+                            <a href="{{ url_for('add_items_to_line_training_form', form_id=form.id) }}" class="btn btn-primary btn-sm w-100">👀 View/Edit</a>
+                            <form action="{{ url_for('delete_line_training_form', form_id=form.id) }}" method="POST" class="w-100">
+                                <button type="submit" class="btn btn-danger btn-sm w-100" onclick="return confirm('Are you sure?')">
+                                    ❌ Delete
+                                </button>
+                            </form>
+                        {% else %}
+                            <p class="text-warning text-center w-100"><strong>Only Training Team can create/edit forms.</strong></p>
+                        {% endif %}
+                    </div>                   
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- No Line Training Forms Message -->
+    {% if not line_training_forms %}
+        <p class="text-muted text-center">No line training forms available.</p>
+    {% endif %}
+</div>
+
+<!-- 🔧 Edit Crew Check Modal -->
+<div class="modal fade" id="editCrewCheckModal" tabindex="-1" aria-labelledby="editCrewCheckLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg"> <!-- Make it wider -->
+      <form method="POST" id="editCrewCheckForm" action="{{ url_for('edit_crew_check', crew_check_id=0) }}">
+        <div class="modal-content">
+          <div class="modal-header bg-warning text-dark">
+            <h5 class="modal-title" id="editCrewCheckLabel">✏️ Edit Crew Check</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+  
+          <div class="modal-body">
+            <input type="hidden" name="crew_check_id" id="crewCheckIdInput">
+  
+            <!-- Nav tabs -->
+            <ul class="nav nav-tabs mb-3" id="editCheckTabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="details-tab" data-bs-toggle="tab" data-bs-target="#detailsTab" type="button" role="tab">📝 Details</button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="headers-tab" data-bs-toggle="tab" data-bs-target="#headersTab" type="button" role="tab">📋 Fields to Show</button>
+              </li>
+            </ul>
+  
+            <!-- Tab panes -->
+            <div class="tab-content">
+              <!-- Details Tab -->
+              <div class="tab-pane fade show active" id="detailsTab" role="tabpanel">
+                <div class="mb-3">
+                  <label for="checkNameInput" class="form-label">Name</label>
+                  <input type="text" class="form-control" name="name" id="checkNameInput" required>
+                </div>
+  
+                <div class="mb-3">
+                  <label class="form-label">Roles</label>
+                  <div class="row">
+                    {% for role in roles %}
+                    <div class="col-md-4">
+                      <div class="form-check">
+                        <input class="form-check-input role-checkbox" type="checkbox" name="roles" value="{{ role.roleID }}" id="role{{ role.roleID }}">
+                        <label class="form-check-label" for="role{{ role.roleID }}">{{ role.role_name }}</label>
+                      </div>
+                    </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+  
+              <!-- Headers Tab -->
+              <div class="tab-pane fade" id="headersTab" role="tabpanel">
+                <div class="mb-3">
+                  <label class="form-label">Select which fields to show in the form:</label>
+                  <div class="row">
+                    {% for field_key, field_label in all_fields %}
+                    <div class="col-md-4">
+                      <div class="form-check">
+                        <input class="form-check-input header-checkbox" type="checkbox" name="headers" value="{{ field_key }}" id="header{{ field_key }}">
+                        <label class="form-check-label" for="header{{ field_key }}">{{ field_label }}</label>
+                      </div>
+                    </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+  
+          <!-- Footer -->
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-warning">Save Changes</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+
+  <script>
+    function openEditModal(checkId, checkName, assignedRoles, selectedHeaders = []) {
+        const form = document.getElementById("editCrewCheckForm");
+        form.action = `/edit_crew_check/${checkId}`;
+
+        document.getElementById("crewCheckIdInput").value = checkId;
+        document.getElementById("checkNameInput").value = checkName;
+
+        document.querySelectorAll(".role-checkbox").forEach(cb => cb.checked = false);
+        assignedRoles.forEach(roleId => {
+            const checkbox = document.getElementById(`role${roleId}`);
+            if (checkbox) checkbox.checked = true;
+        });
+
+        // Reset all header checkboxes
+        document.querySelectorAll(".header-checkbox").forEach(cb => cb.checked = false);
+        selectedHeaders.forEach(header => {
+            const checkbox = document.getElementById(`header${header}`);
+            if (checkbox) checkbox.checked = true;
+        });
+
+        const modal = new bootstrap.Modal(document.getElementById('editCrewCheckModal'));
+        modal.show();
+    }
+    </script>
+    
+{% endblock %}

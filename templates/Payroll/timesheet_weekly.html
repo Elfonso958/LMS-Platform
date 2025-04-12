@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4">Submit Weekly Timesheet</h1>
+
+    <!-- Payroll Period Selection Form -->
+    <form method="GET">
+        <div class="mb-3">
+            <label for="payroll_period_id" class="form-label">Select Payroll Period:</label>
+            <select name="payroll_period_id" class="form-select" required onchange="this.form.submit()">
+                <option value="">-- Select Payroll Period --</option>
+                {% for period in payroll_periods %}
+                    <option value="{{ period.id }}" {% if selected_payroll_period and selected_payroll_period.id == period.id %}selected{% endif %}>
+                        {{ period.start_date.strftime("%A, %d %B %Y") }} - {{ period.end_date.strftime("%A, %d %B %Y") }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+
+    {% if selected_payroll_period %}
+    
+    {% if current_user.job_title and current_user.job_title.has_timesheet_access %}
+    <!-- Timesheet Form -->
+    <form method="POST">
+        <input type="hidden" name="payroll_period_id" value="{{ selected_payroll_period.id }}">
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th rowspan="2">Date</th>
+                    <th rowspan="2">Shift Times</th>
+                    <th rowspan="2">Break</th>
+                    <th rowspan="2">Actual Hours at Work</th>
+                    <th rowspan="2">Less Unpaid Lunch Break</th>
+                    <th rowspan="2">Paid Hours</th>
+            
+                    <!-- ✅ Only show "Call In" column if user is in Auckland -->
+                    {% if current_user.location and current_user.location.name == "Auckland" %}
+                    <th rowspan="2" class="text-center">Call In (Y) (AKL Only)</th>
+                    {% endif %}
+            
+                    <th colspan="4" class="text-center">Ancillary Payments</th>
+                    <th rowspan="2">Actions</th>
+                </tr>
+                <tr>
+                    <th class="text-center">Runway (Number of Inspections)</th>
+                    <th class="text-center">Annual Leave</th>
+                    <th class="text-center">Sick Leave</th>
+                    <th class="text-center">Other (Bereavement etc)</th>
+                </tr>
+            </thead>
+                       
+            <tbody>
+                {% for day in week_days %}
+                <tr data-date="{{ day.strftime('%Y-%m-%d') }}">
+                    <td>{{ day.strftime("%A, %d %B %Y") }}</td>
+                    <td>
+                        <input type="time" name="start_time_{{ day.strftime('%Y-%m-%d') }}" class="form-control"
+                               value="{{ timesheets[day]['start_time'] if timesheets and day in timesheets else '' }}" step="900">
+                        <input type="time" name="finish_time_{{ day.strftime('%Y-%m-%d') }}" class="form-control mt-2"
+                               value="{{ timesheets[day]['finish_time'] if timesheets and day in timesheets else '' }}" step="900">
+                    </td>
+                    <td>
+                        <input type="checkbox" name="lunch_break_{{ day.strftime('%Y-%m-%d') }}"
+                               {% if timesheets and day in timesheets and timesheets[day]['lunch_break'] %}checked{% endif %}>
+                    </td>
+                    <td>
+                        <input type="text" name="actual_hours_{{ day.strftime('%Y-%m-%d') }}" class="form-control"
+                               value="{{ timesheets[day]['actual_hours'] if timesheets and day in timesheets else '0.00' }}" readonly>
+                    </td>
+                    <td>
+                        <input type="text" name="unpaid_break_{{ day.strftime('%Y-%m-%d') }}" class="form-control"
+                               value="{{ timesheets[day]['unpaid_break'] if timesheets and day in timesheets else '0.00' }}" readonly>
+                    </td>
+                    <td>
+                        <input type="text" name="paid_hours_{{ day.strftime('%Y-%m-%d') }}" class="form-control"
+                               value="{{ timesheets[day]['paid_hours'] if timesheets and day in timesheets else '0.00' }}" readonly>
+                    </td>
+            
+                    <!-- ✅ Only show "Call In" for Auckland users -->
+                    {% if current_user.location and current_user.location.name == "Auckland" %}
+                    <td>
+                        <input type="checkbox" name="call_in_{{ day.strftime('%Y-%m-%d') }}"
+                               {% if timesheets and day in timesheets and timesheets[day]['call_in'] %}checked{% endif %}>
+                    </td>
+                    {% endif %}
+            
+                    <td>
+                        <input type="number" name="runway_{{ day.strftime('%Y-%m-%d') }}" class="form-control"
+                               value="{{ timesheets[day]['runway_inspections'] if timesheets and day in timesheets else '0' }}" placeholder="Enter count">
+                    </td>
+                    <td>
+                        <input type="checkbox" name="annual_leave_{{ day.strftime('%Y-%m-%d') }}"
+                               {% if timesheets and day in timesheets and timesheets[day]['annual_leave'] %}checked{% endif %}>
+                    </td>
+                    <td>
+                        <input type="checkbox" name="sick_leave_{{ day.strftime('%Y-%m-%d') }}"
+                               {% if timesheets and day in timesheets and timesheets[day]['sick_leave'] %}checked{% endif %}>
+                    </td>
+                    <td>
+                        <input type="text" name="other_{{ day.strftime('%Y-%m-%d') }}" class="form-control"
+                               value="{{ timesheets[day]['other_notes'] if timesheets and day in timesheets else '' }}" placeholder="Specify reason">
+                    </td>
+                    <td>
+                        <button type="button" class="btn btn-success btn-sm" onclick="saveTimesheet('{{ day.strftime('%Y-%m-%d') }}')">Save</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>    
+        </table>
+        <!-- Conditional Submission Button -->
+        {% if timesheet_status == 'Rejected' %}
+            <button type="submit" class="btn btn-warning">Resubmit Timesheet</button>
+        {% else %}
+            <button type="submit" class="btn btn-primary">Submit Timesheet</button>
+        {% endif %}
+    </form>
+    {% else %}
+    <div class="alert alert-danger">❌ You do not have access to submit timesheets.</div>
+    {% endif %}
+
+    {% else %}
+    <div class="alert alert-warning">Please select a payroll period to enter your timesheet.</div>
+    {% endif %}
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll("tr[data-date]").forEach(row => {
+            updateHours(row); // ✅ Populate values on page load
+        });
+    
+        // ✅ Ensure time inputs only allow 15-minute intervals
+        document.querySelectorAll("input[type='time']").forEach(input => {
+            input.addEventListener("change", function () {
+                let timeValue = this.value;
+                if (timeValue) {
+                    let [hours, minutes] = timeValue.split(":").map(Number);
+                    minutes = Math.round(minutes / 15) * 15;
+                    if (minutes === 60) {
+                        minutes = 0;
+                        hours += 1;
+                    }
+                    this.value = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+                }
+                updateHours(this.closest("tr"));
+            });
+        });
+    
+        // ✅ Ensure lunch break reduces 1 hour from paid hours
+        document.querySelectorAll("input[name^='lunch_break']").forEach(checkbox => {
+            checkbox.addEventListener("change", function () {
+                updateHours(this.closest("tr"));
+            });
+        });
+    
+        function updateHours(row) {
+            let startInput = row.querySelector("input[name^='start_time']");
+            let finishInput = row.querySelector("input[name^='finish_time']");
+            let actualHoursInput = row.querySelector("input[name^='actual_hours']");
+            let unpaidBreakInput = row.querySelector("input[name^='unpaid_break']");
+            let paidHoursInput = row.querySelector("input[name^='paid_hours']");
+            let lunchBreak = row.querySelector("input[name^='lunch_break']").checked;
+    
+            if (startInput.value && finishInput.value) {
+                let startTime = new Date(`1970-01-01T${startInput.value}`);
+                let finishTime = new Date(`1970-01-01T${finishInput.value}`);
+    
+                if (finishTime < startTime) {
+                    alert("Finish time must be after start time.");
+                    finishInput.value = "";
+                    return;
+                }
+    
+                let totalHours = (finishTime - startTime) / 3600000;
+                let unpaid = lunchBreak ? 1.0 : 0.0;
+                let paid = totalHours - unpaid;
+    
+                actualHoursInput.value = totalHours.toFixed(2);
+                unpaidBreakInput.value = unpaid.toFixed(2);
+                paidHoursInput.value = paid.toFixed(2);
+            }
+        }
+    });
+    
+    // ✅ Save Timesheet Entry Without Submitting Form
+    function saveTimesheet(date) {
+        let row = document.querySelector(`tr[data-date='${date}']`);
+        let payrollPeriodId = document.querySelector("select[name='payroll_period_id']").value;
+        let start_time = row.querySelector(`input[name='start_time_${date}']`).value;
+        let finish_time = row.querySelector(`input[name='finish_time_${date}']`).value;
+        let lunch_break = row.querySelector(`input[name='lunch_break_${date}']`).checked ? "on" : "off";
+        let call_in = row.querySelector(`input[name='call_in_${date}']`).checked ? "on" : "off";
+        let runway = row.querySelector(`input[name='runway_${date}']`).value || 0;
+        let annual_leave = row.querySelector(`input[name='annual_leave_${date}']`).checked ? "on" : "off";
+        let sick_leave = row.querySelector(`input[name='sick_leave_${date}']`).checked ? "on" : "off";
+        let other = row.querySelector(`input[name='other_${date}']`).value;
+    
+        fetch("/save_timesheet", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                payroll_period_id: payrollPeriodId,
+                date: date,
+                start_time: start_time,
+                finish_time: finish_time,
+                lunch_break: lunch_break,
+                call_in: call_in,
+                runway: runway,
+                annual_leave: annual_leave,
+                sick_leave: sick_leave,
+                other: other
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert("Timesheet saved successfully!");
+            } else {
+                alert("Error: " + data.error);
+            }
+        });
+    }
+    </script>
+    
+{% endblock %}

@@ -1,0 +1,717 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container-fluid-custom">
+  <div class="card shadow">
+    <div class="card-header bg-primary text-white">
+      <h1 class="mb-0">Flight Operations - Roster Changes</h1>
+    </div>
+    <div class="card-body">
+      <p class="lead">
+        This dashboard displays roster changes waiting to be published to flight crews.
+        Only changes that have not yet been published appear with a publish option.
+      </p>
+
+      <!-- Date Range Inputs -->
+      <div class="row g-3 align-items-end">
+        <div class="col-md-5">
+          <label for="dateFrom" class="form-label">From:</label>
+          <input type="date" id="dateFrom" class="form-control">
+        </div>
+        <div class="col-md-5">
+          <label for="dateTo" class="form-label">To:</label>
+          <input type="date" id="dateTo" class="form-control">
+        </div>
+        <div class="col-md-2">
+          <button id="fetchFlights" class="btn btn-success w-100">Fetch Flights</button>
+        </div>
+      </div>
+
+      <!-- Loading Spinner -->
+      <div id="loadingIndicator" class="text-center my-3" style="display: none;">
+        <p>Loading... Please wait</p>
+        <img src="/static/images/spinner.gif" alt="Loading..." width="50">
+      </div>
+
+      <hr>
+
+      <!-- Date Filter -->
+      <div class="row g-3 align-items-end">
+        <div class="col-md-6">
+          <label for="filterDate" class="form-label">Select Date:</label>
+          <input type="date" id="filterDate" class="form-control">
+        </div>
+        <div class="col-md-6">
+          <button id="filterFlights" class="btn btn-info w-100">Filter Flights</button>
+        </div>
+      </div>
+
+      <!-- Selected Date Display -->
+      <h2 id="selectedDateDisplay" class="text-center my-3">Date: --</h2>
+
+<!-- Flight Table -->
+<div class="table-container">
+    <div class="table-responsive">
+      <table id="flightRosterTable" class="table table-striped table-hover">
+        <thead class="table-dark">
+          <tr>
+            <th>Publish</th>
+            <th colspan="7">Updated Flight</th>
+            <th colspan="7">Instead of (Original Flight)</th>
+          </tr>
+          <tr>
+            <th></th> <!-- Checkbox column -->
+            <th>Aircraft</th>
+            <th>Flight Number</th>
+            <th>Dep Location</th>
+            <th>ETD</th>
+            <th>Arr Location</th>
+            <th>ETA</th>
+            <th>Crew</th>
+            <th>Aircraft</th>
+            <th>Flight Number</th>
+            <th>Dep Location</th>
+            <th>ETD</th>
+            <th>Arr Location</th>
+            <th>ETA</th>
+            <th>Crew</th>
+          </tr>
+        </thead>
+        <tbody id="flightsTable"></tbody>
+      </table>
+    </div>
+  </div>
+  
+
+
+      <!-- 🔵 Publish Button -->
+      <div class="text-end">
+        <button id="publishSelectedFlights" class="btn btn-primary">Publish Selected Flights</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 🔴 Publish Modal -->
+<div id="publishModal" class="modal fade" tabindex="-1" aria-labelledby="publishModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="publishModalLabel">Publish Selected Flights</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Select recipients and provide additional information:</p>
+
+        <label><input type="checkbox" id="sendToCrew"> Send to Crew</label><br>
+        <label><input type="checkbox" id="sendToDefault"> Send to Default Addresses</label><br>
+        <label><input type="checkbox" id="sendToDelaySystem"> Send to Delay Communication System</label><br>
+
+        <!-- 🔵 Additional Airport Input -->
+        <div class="mt-3">
+            <label for="additionalAirportInput" class="form-label">Additional Airport (Delay Comm):</label>
+            <input type="text" id="additionalAirportInput" class="form-control" list="airportList" placeholder="Type to add IATA code">
+            <datalist id="airportList"></datalist>
+        
+            <!-- Selected tags will display here -->
+            <div id="selectedAirportsContainer" class="mt-2"></div>
+        
+            <!-- Hidden field for backend -->
+            <input type="hidden" id="additionalAirport" name="additionalAirport">
+        </div>
+  
+      <div class="modal-footer">
+        <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="confirmPublish" class="btn btn-success">Confirm Publish</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="handlerModal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title">Select Ground Handlers</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="handlerSelectionContainer">
+          <!-- JS will inject checkboxes here -->
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-primary" onclick="finalizePublish()">Continue</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+<!-- Include jQuery (Required for Bootstrap Modals) -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<!-- Include Bootstrap's JavaScript -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- JavaScript Section -->
+<script>
+// ✅ Convert UTC to NZ Local Time (Handles Invalid Values)
+function convertToNZTime(utcTime) {
+    if (!utcTime) return "N/A";
+    try {
+        const utcDate = new Date(utcTime);
+        if (isNaN(utcDate.getTime())) throw new Error("Invalid Date");
+        return new Intl.DateTimeFormat("en-NZ", {
+            timeZone: "Pacific/Auckland",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false
+        }).format(utcDate);
+    } catch (error) {
+        console.error("❌ Error converting time:", utcTime, error);
+        return "Invalid Time";
+    }
+}
+
+// ✅ Function to format the date display
+function updateSelectedDateDisplay(dateString) {
+    const dateObj = new Date(dateString);
+    const options = { weekday: "long", day: "numeric", month: "long", year: "numeric" };
+    const formattedDate = dateObj.toLocaleDateString("en-NZ", options);
+    
+    document.getElementById("selectedDateDisplay").innerHTML = `Date: ${formattedDate}`;
+}
+
+// ✅ Event Listener for Date Filter Button
+document.getElementById("filterFlights").addEventListener("click", function () {
+    const selectedDate = document.getElementById("filterDate").value;
+    updateSelectedDateDisplay(selectedDate); // ✅ Update display
+    fetchAndDisplayFlights(selectedDate);
+});
+
+// ✅ Fetch Flights and Crew Using Cached Employee Data
+document.getElementById("fetchFlights").addEventListener("click", async function () {
+    const dateFrom = document.getElementById("dateFrom").value;
+    const dateTo = document.getElementById("dateTo").value;
+    const authToken = "{{ session['auth_token'] }}";
+    if (!dateFrom || !dateTo) {
+        alert("❌ Please select a valid date range.");
+        return;
+    }
+    document.getElementById("loadingIndicator").style.display = "block";
+    try {
+        const flightsResponse = await fetch("/fetch_all_flight_data", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dateFrom, dateTo, authToken })
+        });
+        const flightsData = await flightsResponse.json();
+        if (!flightsResponse.ok) throw new Error(flightsData.message);
+        console.log("✅ Flights fetched:", flightsData);
+        await fetchAndDisplayFlights();
+        alert("✅ Flights, Crew, and Employees fetched and updated successfully!");
+    } catch (error) {
+        console.error("❌ Error:", error.message);
+        alert(`❌ Error: ${error.message}`);
+    } finally {
+        document.getElementById("loadingIndicator").style.display = "none";
+    }
+});
+
+// ✅ Load Flights on Page Load
+document.addEventListener("DOMContentLoaded", async function () {
+    // ✅ Set default date inputs to today
+    const today = new Date().toISOString().split("T")[0];
+    document.getElementById("dateFrom").value = today;
+    document.getElementById("dateTo").value = today;
+    document.getElementById("filterDate").value = today;
+
+    // ✅ Load today's flights by default
+    await fetchAndDisplayFlights(today);
+    await loadAirportList();  // <-- Make sure this is here
+});
+
+// ✅ Function to compare and highlight crew changes correctly
+function highlightCrew(originalCrew, updatedCrew) {
+    if (!updatedCrew || !originalCrew) return "";
+    const formatCrewList = crew =>
+        Array.isArray(crew)
+            ? crew
+                  .map(member => 
+                      Array.isArray(member) 
+                          ? `${member[1]} ${member[2]}`
+                          : member.firstName && member.surname
+                              ? `${member.firstName} ${member.surname}`
+                              : member
+                  )
+                  .sort()
+                  .join(", ")
+            : crew;
+    const formattedOriginal = formatCrewList(originalCrew);
+    const formattedUpdated = formatCrewList(updatedCrew);
+    return formattedOriginal !== formattedUpdated ? 'style="background-color: yellow; font-weight: bold;"' : "";
+}
+
+// ✅ Fetch & Display Flights
+async function fetchAndDisplayFlights(selectedDate = null) {
+    try {
+        console.log("🔄 Fetching flights from database...");
+        let apiUrl = "/get_flights";
+        if (selectedDate) {
+            apiUrl += `?date=${selectedDate}`;
+        }
+        const response = await fetch(apiUrl);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message);
+
+        console.log("✅ Flights loaded:", data.flights);
+        const flightsTable = document.getElementById("flightsTable");
+        flightsTable.innerHTML = ""; // Clear table
+
+        if (data.flights.length === 0) {
+            flightsTable.innerHTML = "<tr><td colspan='15' class='text-center'>No flights available</td></tr>";
+            return;
+        }
+
+        console.log("✅ Sorting and grouping flights...");
+        const sortedFlights = data.flights
+            .filter(flight => !flight.original?.is_update) // ✅ Remove updates from original sorting
+            .sort((a, b) => {
+                const depA = new Date(`1970-01-01T${a.original?.departureScheduled || "23:59:59"}`);
+                const depB = new Date(`1970-01-01T${b.original?.departureScheduled || "23:59:59"}`);
+                return depA - depB;
+            });
+
+        const groupedFlights = groupFlightsByAircraft(sortedFlights);
+
+        // ✅ Place Global Remark Above Table Headers
+        const globalRemarkHTML = `
+            <tr>
+                <td colspan="15">
+                    <strong>Global Change Remark:</strong> 
+                    <input type="text" id="globalRemark" class="form-control" placeholder="E.g., A/C Change, Delay Warning, Additional Positioning Flight">
+                </td>
+            </tr>
+        `;
+
+        flightsTable.innerHTML = globalRemarkHTML;
+
+        for (const [aircraft, flights] of Object.entries(groupedFlights)) {
+            console.log(`📌 Rendering Aircraft: ${aircraft}`);
+
+            // ✅ Aircraft Header
+            const aircraftRow = document.createElement("tr");
+            aircraftRow.className = "aircraft-header";  // add class for clarity
+            aircraftRow.setAttribute("data-label", aircraft);  // store label
+            aircraftRow.innerHTML = `<td colspan="15" class="bg-secondary text-white fw-bold" data-label="${aircraft}">${aircraft}</td>`;;
+            flightsTable.appendChild(aircraftRow);
+
+            flights.forEach(({ original, updated }) => {
+                console.log("📌 Processing Flight:", updated?.flightNumberDescription || "No update");
+
+                const row = document.createElement("tr");
+
+                // ✅ Function to highlight changes
+                function highlightChange(originalValue, updatedValue) {
+                    return originalValue !== updatedValue && updatedValue
+                        ? 'style="background-color: yellow; font-weight: bold;"'
+                        : "";
+                }
+
+                // ✅ Function to highlight crew changes
+                function highlightCrew(originalCrew, updatedCrew) {
+                    return formatCrew(originalCrew) !== formatCrew(updatedCrew)
+                        ? 'style="background-color: yellow; font-weight: bold;"'
+                        : "";
+                }
+
+                // ✅ Function to format crew names
+                function formatCrew(crewList) {
+                    if (!crewList || crewList === "No Crew Assigned") {
+                        return "No Crew Assigned";
+                    }
+                    return Array.isArray(crewList)
+                        ? crewList
+                              .map(member =>
+                                  Array.isArray(member)
+                                      ? `${member[1]} ${member[2]}`
+                                      : member.firstName && member.surname
+                                      ? `${member.firstName} ${member.surname}`
+                                      : member
+                              )
+                              .sort()
+                              .join(", ")
+                        : crewList;
+                }
+
+                const hasUpdate = updated && updated.id;
+                row.innerHTML = `
+                    <td>${hasUpdate ? `<input type="checkbox" class="flight-checkbox" value="${updated.id}">` : ""}</td>
+
+                    <!-- Updated Flight Data -->
+                    <td ${highlightChange(original?.flightLineDescription, updated?.flightLineDescription)}>
+                        ${hasUpdate ? updated?.flightLineDescription || "N/A" : ""}
+                    </td>
+                    <td>${hasUpdate ? updated?.flightNumberDescription || "N/A" : ""}</td>
+                    <td ${highlightChange(original?.departurePlaceDescription, updated?.departurePlaceDescription)}>
+                        ${hasUpdate ? updated?.departurePlaceDescription || "N/A" : ""}
+                    </td>
+                    <td ${highlightChange(original?.departureScheduled, updated?.departureScheduled)}>
+                        ${hasUpdate ? updated?.departureScheduled || "N/A" : ""}
+                    </td>
+                    <td ${highlightChange(original?.arrivalPlaceDescription, updated?.arrivalPlaceDescription)}>
+                        ${hasUpdate ? updated?.arrivalPlaceDescription || "N/A" : ""}
+                    </td>
+                    <td ${highlightChange(original?.arrivalScheduled, updated?.arrivalScheduled)}>
+                        ${hasUpdate ? updated?.arrivalScheduled || "N/A" : ""}
+                    </td>
+                    <td ${highlightCrew(original?.crew, updated?.crew)}>
+                        ${hasUpdate ? formatCrew(updated?.crew) : ""}
+                    </td>
+
+                    <!-- Original Flight Data (Instead of) -->
+                    <td>${original?.flightLineDescription || "N/A"}</td>
+                    <td>${original?.flightNumberDescription || "N/A"}</td>
+                    <td>${original?.departurePlaceDescription || "N/A"}</td>
+                    <td>${original?.departureScheduled || "N/A"}</td>
+                    <td>${original?.arrivalPlaceDescription || "N/A"}</td>
+                    <td>${original?.arrivalScheduled || "N/A"}</td>
+                    <td>${formatCrew(original?.crew)}</td>
+                `;
+
+                flightsTable.appendChild(row);
+            });
+                    // ✅ Local Remark under each aircraft group
+                    const remarkRow = document.createElement("tr");
+            remarkRow.innerHTML = `
+                <td colspan="15">
+                    <strong>Local Remark for ${aircraft}:</strong> 
+                    <input type="text" class="form-control localRemark" placeholder="Add specific notes for this aircraft group">
+                </td>
+            `;
+            flightsTable.appendChild(remarkRow);
+        }
+
+        console.log("✅ Table updated successfully!");
+
+    } catch (error) {
+        console.error("❌ Error fetching flights:", error.message);
+        alert(`❌ Error: ${error.message}`);
+    }
+}
+
+function groupFlightsByAircraft(flights) {
+    const grouped = {};
+    flights.forEach(({ original, updated }) => {
+        const aircraft = original?.flightLineDescription || updated?.flightLineDescription || "Unknown Aircraft";
+        if (!grouped[aircraft]) grouped[aircraft] = [];
+        grouped[aircraft].push({ original, updated });
+    });
+    return grouped;
+}
+
+// ✅ Event Listener for Filtering by Date
+document.getElementById("filterFlights").addEventListener("click", function () {
+    const selectedDate = document.getElementById("filterDate").value;
+    fetchAndDisplayFlights(selectedDate);
+});
+
+// ✅ Helper to format crew list
+function formatCrew(crewList) {
+    if (!crewList || crewList === "No Crew Assigned") {
+        return "No Crew Assigned";
+    }
+    try {
+        if (typeof crewList === "string") {
+            return crewList;  
+        }
+        if (Array.isArray(crewList)) {
+            return crewList.map(member => {
+                if (typeof member === "object" && member.firstName && member.surname) {
+                    return `${member.firstName} ${member.surname}`;
+                } else if (Array.isArray(member) && member.length >= 3) {
+                    return `${member[1]} ${member[2]}`;
+                } else if (typeof member === "string") {
+                    return member;
+                }
+                return "Unknown Crew";
+            }).join(", ");
+        }
+    } catch (error) {
+        console.error("❌ Error formatting crew:", crewList, error);
+    }
+    return "Unknown Crew";
+}
+// ✅ Open Publish Modal
+document.getElementById("publishSelectedFlights").addEventListener("click", function () {
+    const selectedFlights = [...document.querySelectorAll(".flight-checkbox:checked")].map(cb => cb.value);
+    if (selectedFlights.length === 0) {
+        alert("❌ Please select at least one flight to publish.");
+        return;
+    }
+    console.log("📌 Selected Flights:", selectedFlights);
+    $("#publishModal").modal("show"); // Bootstrap Modal
+});
+
+// ✅ Confirm Publish
+document.getElementById("confirmPublish").addEventListener("click", function () {
+    const globalRemark = document.getElementById("globalRemark").value;
+    const sendToCrew = document.getElementById("sendToCrew").checked;
+    const sendToDefault = document.getElementById("sendToDefault").checked;
+    const sendToDelaySystem = document.getElementById("sendToDelaySystem").checked;
+    const additionalAirport = [...selectedAirports].join(',');
+
+    const localRemarks = {};
+    document.querySelectorAll('.localRemark').forEach(input => {
+        const aircraftRow = input.closest("tr")?.previousElementSibling?.previousElementSibling;
+        if (aircraftRow && aircraftRow.classList.contains("aircraft-header")) {
+            const label = aircraftRow.dataset.label?.trim();
+            if (label) {
+                localRemarks[label] = input.value.trim();
+            }
+        }
+    });
+
+    const selectedFlights = [...document.querySelectorAll(".flight-checkbox:checked")].map(cb => cb.value);
+
+    originalPayload = {
+        flights: selectedFlights,
+        globalRemark,
+        localRemarks,
+        sendToCrew,
+        sendToDefault,
+        sendToDelaySystem,
+        additionalAirport
+    };
+
+    console.log("🧪 Previewing before final publish:", originalPayload);
+
+    fetch("/publish_flights_preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(originalPayload)
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.handler_selection_required) {
+            showHandlerSelectionPopup(data.handler_selection_required);
+        } else if (data.success) {
+            finalizePublish(); // 👈 Safe to proceed
+        } else {
+            alert(`❌ Error: ${data.message || "Unknown issue"}`);
+        }
+    })
+    .catch(error => {
+        console.error("❌ Preview publish error:", error);
+        alert("❌ Error previewing publish.");
+    });
+});
+
+
+document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".flightCheckbox").forEach(checkbox => {
+        checkbox.addEventListener("change", function () {
+            let flightId = this.value;
+            let isChecked = this.checked;
+            console.log(`📌 Flight Checkbox Clicked: Flight ID: ${flightId}, Selected: ${isChecked}`);
+
+            // Log the associated flight details (Assuming flight details are in a table row)
+            let row = this.closest("tr");
+            if (row) {
+                let flightNumber = row.querySelector(".flight-number")?.textContent || "N/A";
+                let depLocation = row.querySelector(".dep-location")?.textContent || "N/A";
+                let etd = row.querySelector(".etd")?.textContent || "N/A";
+                let arrLocation = row.querySelector(".arr-location")?.textContent || "N/A";
+                let eta = row.querySelector(".eta")?.textContent || "N/A";
+                let crew = row.querySelector(".crew")?.textContent || "N/A";
+
+                console.log(`📌 Flight Details: ${flightNumber} | ${depLocation} | ${etd} | ${arrLocation} | ${eta} | Crew: ${crew}`);
+            }
+        });
+    });
+});
+
+// ✅ Safe publishScheduleBtn click handler (avoids crashing if the button doesn't exist)
+const publishBtn = document.getElementById("publishScheduleBtn");
+if (publishBtn) {
+    publishBtn.addEventListener("click", function () {
+        let selectedFlights = getSelectedFlights();  // ✅ Log selected flights
+        let globalRemark = prompt("Enter Global Remark:", "");  
+
+        if (selectedFlights.length === 0) {
+            alert("No flights selected for publishing.");
+            return;
+        }
+
+        fetch("/publish_flights", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                selected_flights: selectedFlights,
+                global_remark: globalRemark
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log("📌 Publish Response:", data);
+            if (data.success) {
+                alert("Schedule published successfully!");
+            } else {
+                alert("Error publishing schedule: " + data.error);
+            }
+        })
+        .catch(error => console.error("Error publishing schedule:", error));
+    });
+}
+function showHandlerSelectionPopup(handlerData) {
+    const container = document.getElementById("handlerSelectionContainer");
+    container.innerHTML = "";
+
+    for (const [port, handlers] of Object.entries(handlerData)) {
+        const group = document.createElement("div");
+        group.classList.add("mb-3");
+
+        const heading = document.createElement("strong");
+        heading.textContent = port;
+        group.appendChild(heading);
+        group.appendChild(document.createElement("br"));
+
+        handlers.forEach(handler => {
+            const emails = handler.emails.join(', ');
+
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.classList.add("handler-email");
+            checkbox.value = handler.emails.join(',');  // store comma-separated string
+            checkbox.checked = true;
+
+            const label = document.createElement("label");
+            label.classList.add("d-block", "mt-1");
+            label.appendChild(checkbox);
+            label.append(` ${handler.name} (${emails})`);
+
+            group.appendChild(label);
+        });
+
+        container.appendChild(group);
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById("handlerModal"), {
+        backdrop: 'static',
+        keyboard: false
+    });
+    modal.show();
+}
+
+function finalizePublish() {
+    // If the modal was shown, collect selected handler emails
+    let selectedEmails = [];
+    const handlerCheckboxes = document.querySelectorAll(".handler-email:checked");
+
+    if (handlerCheckboxes.length > 0) {
+        selectedEmails = [...handlerCheckboxes]
+            .flatMap(cb => cb.value.split(',').map(email => email.trim()))
+            .filter(email => email);
+    }
+
+    // ✅ If no handlers selected and no modal was shown, fallback to previously collected payload
+    if (selectedEmails.length === 0 && (!originalPayload.selectedHandlerEmails || originalPayload.selectedHandlerEmails.length === 0)) {
+        console.log("✅ Skipping handler selection – using default recipients from backend logic");
+        selectedEmails = [];  // empty list means backend will auto-pick based on single-handler logic
+    }
+
+    const finalPayload = {
+        ...originalPayload,
+        selectedHandlerEmails: selectedEmails
+    };
+
+    fetch("/publish_flights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(finalPayload)
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert(data.message || "✅ Flights successfully published!");
+        $("#handlerModal").modal("hide");
+        $("#publishModal").modal("hide");
+    })
+    .catch(error => {
+        console.error("❌ Final publish error:", error);
+        alert("❌ Error finalizing publish.");
+    });
+}
+
+let validAirports = [];
+const selectedAirports = new Set();
+
+async function loadAirportList() {
+  try {
+    const res = await fetch("/get_airport_codes");
+    const data = await res.json();
+    validAirports = data.airports;
+
+    const listElement = document.getElementById("airportList");
+    listElement.innerHTML = "";
+    validAirports.forEach(code => {
+      const opt = document.createElement("option");
+      opt.value = code;
+      listElement.appendChild(opt);
+    });
+
+  } catch (err) {
+    console.error("❌ Failed to load airport codes:", err);
+  }
+}
+
+function updateAdditionalAirportField() {
+  const hiddenInput = document.getElementById("additionalAirport");
+  hiddenInput.value = Array.from(selectedAirports).join(",");
+}
+
+document.getElementById("additionalAirportInput").addEventListener("keydown", function (e) {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const input = e.target;
+    const code = input.value.trim().toUpperCase();
+
+    if (!code || !validAirports.includes(code)) {
+      alert(`❌ "${code}" is not a valid airport.`);
+      input.value = "";
+      return;
+    }
+
+    if (selectedAirports.has(code)) {
+      input.value = "";
+      return;
+    }
+
+    selectedAirports.add(code);
+    updateAdditionalAirportField();
+
+    const tag = document.createElement("span");
+    tag.className = "badge bg-primary me-1 mb-1";
+    tag.textContent = code;
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "btn-close btn-close-white btn-sm ms-1";
+    removeBtn.style.fontSize = "0.6rem";
+    removeBtn.addEventListener("click", () => {
+      tag.remove();
+      selectedAirports.delete(code);
+      updateAdditionalAirportField();
+    });
+
+    tag.appendChild(removeBtn);
+    document.getElementById("selectedAirportsContainer").appendChild(tag);
+
+    input.value = "";
+  }
+});
+
+</script>
+{% endblock %}

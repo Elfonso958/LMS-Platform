@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4">Manage Payroll Periods</h1>
+
+    <form method="POST">
+        <div class="mb-3">
+            <label for="start_date" class="form-label">Start Date:</label>
+            <input type="date" id="start_date" name="start_date" class="form-control" value="{{ suggested_start_date }}" required>
+        </div>
+        <div class="mb-3">
+            <label for="end_date" class="form-label">End Date:</label>
+            <input type="date" id="end_date" name="end_date" class="form-control" value="{{ suggested_end_date }}" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Add Payroll Period</button>
+    </form>
+
+    <hr>
+
+    <h3>Existing Payroll Periods</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for period in payroll_periods %}
+            <tr>
+                <td>{{ period.start_date.strftime("%A %d %B, %Y") }}</td>
+                <td>{{ period.end_date.strftime("%A %d %B, %Y") }}</td>
+                <td>
+                    {% if period.status == "Open" %}
+                        <span class="badge bg-success">Open</span>
+                    {% else %}
+                        <span class="badge bg-danger">Closed</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <!-- Toggle Status Button -->
+                    <form method="POST" action="{{ url_for('toggle_payroll_status', payroll_id=period.id) }}" style="display:inline;">
+                        <button class="btn btn-warning btn-sm">
+                            {% if period.status == "Open" %}Close{% else %}Reopen{% endif %}
+                        </button>
+                    </form>
+
+                    <!-- Delete Payroll Period -->
+                    <form method="POST" action="{{ url_for('delete_payroll_period', payroll_id=period.id) }}" onsubmit="return confirm('Are you sure?');" style="display:inline;">
+                        <button class="btn btn-danger btn-sm">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

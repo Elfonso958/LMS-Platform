@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Line Training Form{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Edit Line Training Form</h1>
+
+    <form method="POST">
+        {{ form.hidden_tag() }}  <!-- This includes the CSRF token automatically -->
+        <div class="form-group">
+            <label for="name">Training Form Name</label>
+            {{ form.name(class="form-control") }}
+        </div>
+        <div class="form-group">
+            <label for="roles">Assign Roles</label>
+            {{ form.roles(class="form-control", multiple=True) }}
+        </div>
+        <button type="submit" class="btn btn-primary">Save</button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+
+{% block title %}Checks{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <h1 class="mb-4">Checks</h1>
+
+<!-- Filter Form -->
+<form method="GET" action="{{ url_for('checks') }}">
+  <div class="row mb-3">
+    <div class="col-md-3">
+      <label for="status_filter" class="form-label">Filter Checks</label>
+      <select class="form-select form-select-sm" id="status_filter" name="status">
+        <option value="all" {% if request.args.get('status', 'all') == 'all' %}selected{% endif %}>All</option>
+        <option value="completed" {% if request.args.get('status') == 'completed' %}selected{% endif %}>Completed</option>
+        <option value="incomplete" {% if request.args.get('status') == 'incomplete' %}selected{% endif %}>Incomplete</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label for="aircraft_filter" class="form-label">Aircraft Type</label>
+      <select class="form-select form-select-sm" id="aircraft_filter" name="aircraft">
+        <option value="all" {% if request.args.get('aircraft', 'all') == 'all' %}selected{% endif %}>All</option>
+        <option value="ATR 72" {% if request.args.get('aircraft') == 'ATR 72' %}selected{% endif %}>ATR 72</option>
+        <option value="SF34" {% if request.args.get('aircraft') == 'SF34' %}selected{% endif %}>SF34</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label for="type_of_check_filter" class="form-label">Type of Check</label>
+      <select class="form-select form-select-sm" id="type_of_check_filter" name="type_of_check">
+        <option value="all" {% if request.args.get('type_of_check', 'all') == 'all' %}selected{% endif %}>All</option>
+        {% for check in crew_checks %}
+          <option value="{{ check }}" {% if request.args.get('type_of_check') == check %}selected{% endif %}>{{ check }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label for="candidate_filter" class="form-label">Candidate</label>
+      <input type="text" class="form-control form-control-sm" id="candidate_filter" name="candidate" 
+             value="{{ request.args.get('candidate', '') }}" placeholder="Enter candidate name">
+    </div>
+    <div class="col-md-3">
+      <label for="active_filter" class="form-label">User Status</label>
+      <select class="form-select form-select-sm" id="active_filter" name="active">
+        <option value="active" {% if request.args.get('active') == 'active' %}selected{% endif %}>Active</option>
+        <option value="inactive" {% if request.args.get('active') == 'inactive' %}selected{% endif %}>Inactive</option>
+      </select>
+    </div>
+    
+  </div>
+  <div class="row">
+    <div class="col-md-2 align-self-end">
+      <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+    </div>
+  </div>
+</form>
+
+
+  <!-- Table for displaying checks -->
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        {% set sort_by = request.args.get('sort_by', 'date_of_test') %}
+        {% set order = request.args.get('order', 'asc') %}
+
+        {% set order_value_check_name = 'asc' if sort_by != 'check_name' or order == 'desc' else 'desc' %}
+        <th><a href="{{ url_for('checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='check_name', order=order_value_check_name) }}">Check Name</a></th>
+        
+        {% set order_value_aircraft_type = 'asc' if sort_by != 'aircraft_type' or order == 'desc' else 'desc' %}
+        <th><a href="{{ url_for('checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='aircraft_type', order=order_value_aircraft_type) }}">Aircraft Type</a></th>
+        
+        {% set order_value_candidate = 'asc' if sort_by != 'candidate' or order == 'desc' else 'desc' %}
+        <th><a href="{{ url_for('checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='candidate', order=order_value_candidate) }}">Candidate</a></th>
+        
+        {% set order_value_date_of_test = 'asc' if sort_by != 'date_of_test' or order == 'desc' else 'desc' %}
+        <th class="date-column"><a href="{{ url_for('checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='date_of_test', order=order_value_date_of_test) }}">Date of Test</a></th>
+        
+        {% set order_value_test_result = 'asc' if sort_by != 'test_result' or order == 'desc' else 'desc' %}
+        <th><a href="{{ url_for('checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='test_result', order=order_value_test_result) }}">Test Result</a></th>
+        
+        {% set order_value_status = 'asc' if sort_by != 'status' or order == 'desc' else 'desc' %}
+        <th><a href="{{ url_for('checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='status', order=order_value_status) }}">Status</a></th>
+        
+        {% set order_value_next_check_due = 'asc' if sort_by != 'next_check_due' or order == 'desc' else 'desc' %}
+        <th class="date-column"><a href="{{ url_for('checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='next_check_due', order=order_value_next_check_due) }}">Next Check Due</a></th>
+        
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set status_filter = request.args.get('status', 'all') %}
+      {% set aircraft_filter = request.args.get('aircraft', 'all') %}
+      {% set candidate_filter = request.args.get('candidate', '') %}
+      {% for check_meta in crew_checks_meta %}
+        {% set completed = check_meta.is_complete %}
+        {% if (status_filter == 'all' or (status_filter == 'completed' and completed) or (status_filter == 'incomplete' and not completed)) and
+              (aircraft_filter == 'all' or check_meta.aircraft_type == aircraft_filter) and
+              (candidate_filter == '' or candidate_filter.lower() in check_meta.candidate.username.lower()) %}
+          <tr>
+            <td>{{ check_meta.check.name }}</td>
+            <td>{{ check_meta.aircraft_type }}</td>
+            <td>{{ check_meta.candidate.username }}</td>
+            <td class="date-column">{{ check_meta.date_of_test.strftime('%d/%m/%Y') }}</td>
+            <td>{{ check_meta.test_result }}</td>
+            <td>
+              {% if completed %}
+                <span class="text-success">Completed</span>
+              {% else %}
+                <span class="text-warning">Incomplete</span>
+              {% endif %}
+            </td>
+            <td class="date-column">{{ check_meta.next_check_due.strftime('%d/%m/%Y') }}</td>
+            <td>
+              {% if not completed %}
+                <!-- Link to complete the form -->
+                <a href="{{ url_for('crew_check_form', crew_check_id=check_meta.crew_check_id, draft_id=check_meta.id) }}" class="btn btn-warning btn-sm">Complete Form</a>
+                <!-- Delete button for incomplete checks -->
+                <form action="{{ url_for('delete_check_meta', meta_id=check_meta.id) }}" method="POST" style="display:inline;">
+                  <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this incomplete check?');">
+                    Delete
+                  </button>
+                </form>
+              {% else %}
+                <a href="{{ url_for('crew_check_form', crew_check_id=check_meta.crew_check_id, draft_id=check_meta.id) }}" class="btn btn-info btn-sm">View Form</a>
+              {% endif %}
+            </td>
+          </tr>
+        {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

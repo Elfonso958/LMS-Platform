@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}View Crew Check{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <h1 class="mb-4">Crew Check Details</h1>
+
+  <!-- Candidate Information Section -->
+  <div class="row mb-3">
+    {% if 'candidate_name' in visible_fields %}
+    <div class="col-md-3">
+      <label class="form-label">Candidate Name</label>
+      <p class="form-control-static">{{ check_meta.candidate.username }}</p>
+    </div>
+    {% endif %}
+
+    {% if 'licence_type' in visible_fields %}
+    <div class="col-md-3">
+      <label class="form-label">Licence Type</label>
+      <p class="form-control-static">{{ check_meta.candidate.license_type }}</p>
+    </div>
+    {% endif %}
+
+    {% if 'licence_number' in visible_fields %}
+    <div class="col-md-3">
+      <label class="form-label">Licence Number</label>
+      <p class="form-control-static">{{ check_meta.candidate.license_number }}</p>
+    </div>
+    {% endif %}
+
+    {% if 'medical_expiry' in visible_fields %}
+    <div class="col-md-3">
+      <label class="form-label">Medical Expiry</label>
+      <p class="form-control-static">
+        {{ check_meta.candidate.medical_expiry.strftime('%Y-%m-%d') if check_meta.candidate.medical_expiry else "N/A" }}
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Check Details -->
+  <div class="row mb-3">
+    {% if 'date_of_test' in visible_fields %}
+    <div class="col-md-3">
+      <label class="form-label">Date of Test</label>
+      <p class="form-control-static">{{ check_meta.date_of_test }}</p>
+    </div>
+    {% endif %}
+
+    {% if 'aircraft_type' in visible_fields %}
+    <div class="col-md-3">
+      <label class="form-label">Aircraft Type</label>
+      <p class="form-control-static">{{ check_meta.aircraft_type }}</p>
+    </div>
+    {% endif %}
+
+    {% if 'aircraft_registration' in visible_fields %}
+    <div class="col-md-3">
+      <label class="form-label">Aircraft Registration</label>
+      <p class="form-control-static">{{ check_meta.aircraft_registration }}</p>
+    </div>
+    {% endif %}
+
+    {% if 'type_of_check' in visible_fields %}
+    <div class="col-md-3">
+      <label class="form-label">Type of Check</label>
+      <p class="form-control-static">{{ check_meta.type_of_check }}</p>
+    </div>
+    {% endif %}
+  </div>
+
+
+  <hr>
+
+  <!-- Assessment Criteria -->
+  <h5 class="small">Assessment Criteria</h5>
+  <table class="table table-bordered table-sm">
+    <thead>
+      <tr>
+        <th>Assessment Criteria</th>
+        <th>Mandatory</th>
+        <th>Grading</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in check_items %}
+        {% if item.version <= check_meta.template_version %}  {# ✅ Version Control: Only show relevant items #}
+        <tr>
+          <td>
+            <a href="{{ item.manual_link }}" target="_blank">{{ item.item_name }}</a>
+          </td>
+          <td>{% if item.mandatory %}Yes{% else %}No{% endif %}</td>
+          <td>
+            {% set grade = check_meta.get_grade(item.id) %}
+            <div class="form-check form-check-inline">
+              <input type="radio" class="form-check-input" disabled {% if grade == '1' %}checked{% endif %}>
+              <label class="form-check-label small">1</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" class="form-check-input" disabled {% if grade == '2' %}checked{% endif %}>
+              <label class="form-check-label small">2</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" class="form-check-input" disabled {% if grade == '3' %}checked{% endif %}>
+              <label class="form-check-label small">3</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" class="form-check-input" disabled {% if grade == '4' %}checked{% endif %}>
+              <label class="form-check-label small">4</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" class="form-check-input" disabled {% if grade == '5' %}checked{% endif %}>
+              <label class="form-check-label small">5</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" class="form-check-input" disabled {% if grade == 'NA' %}checked{% endif %}>
+              <label class="form-check-label small">Not Assessed (NA)</label>
+            </div>
+          </td>
+        </tr>
+        {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <hr>
+
+  <!-- Additional Information -->
+  <h5 class="small">Additional Information</h5>
+  <div class="row mb-2">
+    <div class="col-md-12">
+      <label class="form-label">Comments</label>
+      <p class="form-control-static">{{ check_meta.comments }}</p>
+    </div>
+  </div>
+
+  <!-- Check Due and Exam Info -->
+  <div class="row mb-3">
+    {% if 'current_check_due' in visible_fields %}
+    <div class="col-md-4">
+      <label class="form-label">Current Check Due</label>
+      <p class="form-control-static">{{ check_meta.current_check_due }}</p>
+    </div>
+    {% endif %}
+  
+    {% if 'test_result' in visible_fields %}
+    <div class="col-md-4">
+      <label class="form-label">Test Result</label>
+      <p class="form-control-static">{{ check_meta.test_result }}</p>
+    </div>
+    {% endif %}
+  
+    {% if 'logbook_sticker_issued' in visible_fields %}
+    <div class="col-md-4">
+      <label class="form-label">Logbook Sticker Issued</label>
+      <p class="form-control-static">{{ check_meta.logbook_sticker_issued }}</p>
+    </div>
+    {% endif %}
+  </div>
+  
+  <div class="row mb-2">
+    {% if 'next_check_due' in visible_fields %}
+    <div class="col-md-4">
+      <label class="form-label">Next Check Due</label>
+      <p class="form-control-static">{{ check_meta.next_check_due }}</p>
+    </div>
+    {% endif %}
+  
+    {% if 'examiner_name' in visible_fields %}
+    <div class="col-md-4">
+      <label class="form-label">Examiner Name</label>
+      <p class="form-control-static">{{ check_meta.examiner_name }}</p>
+    </div>
+    {% endif %}
+  
+    {% if 'examiner_licence_number' in visible_fields %}
+    <div class="col-md-4">
+      <label class="form-label">Examiner Licence Number</label>
+      <p class="form-control-static">{{ check_meta.examiner_license_number }}</p>
+    </div>
+    {% endif %}
+  </div>
+  
+
+  <!-- Back to Checks Button -->
+  <div class="row mt-4">
+    <div class="col-md-6">
+      <a href="{{ url_for('my_crew_checks') }}" class="btn btn-secondary">Back to My Checks</a>
+    </div>
+    <div class="col-md-6 text-end">
+      <a href="{{ url_for('print_check', check_meta_id=check_meta.id) }}" target="_blank" class="btn btn-primary">Print Check</a>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

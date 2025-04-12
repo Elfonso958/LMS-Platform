@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Create Line Training Form{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4">➕ Create Line Training Form</h1>
+
+    <form method="POST">
+        <div class="mb-3">
+            <label for="formName" class="form-label">Form Name</label>
+            <input type="text" class="form-control" id="formName" name="name" placeholder="Enter form name" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Assign Roles</label>
+            <div class="row">
+                {% for role in roles %}
+                <div class="col-md-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="roles" value="{{ role.roleID }}" id="role{{ role.roleID }}">
+                        <label class="form-check-label" for="role{{ role.roleID }}">{{ role.role_name }}</label>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-success">✅ Create Form</button>
+        <a href="{{ url_for('crew_checks_dashboard') }}" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %}

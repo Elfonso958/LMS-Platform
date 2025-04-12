@@ -1,0 +1,433 @@
+{% extends "base.html" %}
+
+{% block title %}Ports and Ground Handlers{% endblock %}
+
+{% block content %}
+<h1>Ports and Associated Ground Handlers</h1>
+
+<!-- Admin Actions -->
+{% if current_user.is_admin %}
+<div class="mb-3">
+    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addPortModal">➕ Add New Port</button>
+</div>
+{% endif %}
+
+<div class="container">
+    <div class="row">
+        <!-- Sidebar with sorted IATA codes -->
+        <div class="col-md-3">
+            <ul class="list-group" id="iataList">
+                {% for port in ports|sort(attribute="iata_code") %}
+                <li class="list-group-item iata-code" data-port-id="{{ port.iata_code }}">
+                    {{ port.iata_code }}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <!-- Main content area with dynamic tabs -->
+        <div class="col-md-9">
+            <div class="card shadow-sm p-3">
+                <h3 id="portTitle">Select an IATA code to view details</h3>
+                {% if current_user.is_admin %}
+                <div class="mb-3">
+                    <button class="btn btn-primary" id="addHandlerBtn" data-bs-toggle="modal" data-bs-target="#addHandlerModal" disabled>
+                        ➕ Add Ground Handler
+                    </button>
+                </div>
+                {% endif %}
+                
+
+                <!-- Dynamic Tabs Navigation -->
+                <ul class="nav nav-tabs" id="handlerTabs">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="default-tab" data-bs-toggle="tab" href="#default">Select a port</a>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content mt-3" id="handlerContent">
+                    <div class="tab-pane fade show active" id="default">
+                        <p>Select an IATA code to view ground handlers.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Add Handler Modal -->
+<div class="modal fade" id="addHandlerModal" tabindex="-1" aria-labelledby="addHandlerModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form id="addHandlerForm">
+          <div class="modal-header">
+            <h5 class="modal-title">Add Ground Handler</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" name="iata_code" id="handlerIataCode">
+            <div class="mb-3">
+              <label class="form-label">Handling Agent</label>
+              <input type="text" class="form-control" name="handling_agent" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Contact Person</label>
+              <input type="text" class="form-control" name="contact_person">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Phone</label>
+              <input type="text" class="form-control" name="agent_contact">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Primary Email</label>
+              <input type="email" class="form-control" name="primary_email">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Additional Emails</label>
+              <input type="text" class="form-control" name="additional_contacts">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Agent Frequency</label>
+              <input type="text" class="form-control" name="agent_frequency">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">GPU Available</label>
+              <select name="gpu_available" class="form-select">
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="submit" class="btn btn-success">Save Handler</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  
+<!-- Edit Ground Handler Modal -->
+<div class="modal fade" id="editHandlerModal" tabindex="-1" aria-labelledby="editHandlerModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Ground Handler</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editHandlerForm">
+                    <input type="hidden" name="handler_id" id="editHandlerId">
+                    <div class="mb-3">
+                        <label class="form-label">Handling Agent</label>
+                        <input type="text" class="form-control" name="handling_agent" id="editHandlingAgent" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Contact Person</label>
+                        <input type="text" class="form-control" name="contact_person" id="editContactPerson">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Phone</label>
+                        <input type="text" class="form-control" name="agent_contact" id="editAgentContact">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Primary Email</label>
+                        <input type="email" class="form-control" name="primary_email" id="editPrimaryEmail">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Additional Emails (comma-separated)</label>
+                        <input type="text" class="form-control" name="additional_contacts" id="editAdditionalEmails">
+                    </div>
+                    <button type="submit" class="btn btn-warning">Update Handler</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Add New Port Modal -->
+<div class="modal fade" id="addPortModal" tabindex="-1" aria-labelledby="addPortModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New Port</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addPortForm">
+                    <div class="mb-3">
+                        <label class="form-label">Port Name</label>
+                        <input type="text" class="form-control" name="port_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">IATA Code</label>
+                        <input type="text" class="form-control" name="iata_code" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">ICAO Code</label>
+                        <input type="text" class="form-control" name="icao_code" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Country</label>
+                        <input type="text" class="form-control" name="country" required>
+                    </div>
+                    <button type="submit" class="btn btn-success">Save Port</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const handlerTabs = document.getElementById("handlerTabs");
+    const handlerContent = document.getElementById("handlerContent");
+    const portTitle = document.getElementById("portTitle");
+
+    // Attach event listener for port selection using delegation
+    document.getElementById("iataList").addEventListener("click", function (event) {
+        let item = event.target.closest(".iata-code");
+
+        // Ignore clicks on edit buttons inside the port list
+        if (!item || event.target.classList.contains("edit-port-btn")) return;
+
+        // Remove highlight from all IATA items
+        document.querySelectorAll(".iata-code").forEach(i => i.classList.remove("selected"));
+
+        // Highlight the selected item
+        item.classList.add("selected");
+
+        const selectedIATA = item.getAttribute("data-port-id");
+
+        fetch(`/get_port_details/${selectedIATA}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    portTitle.innerHTML = `<p class="text-danger">Error: ${data.error}</p>`;
+                    return;
+                }
+
+                // Update Port Title
+                portTitle.innerHTML = `<h3>${data.port_name} (${data.iata_code})</h3>`;
+
+                // Clear existing tabs and content
+                handlerTabs.innerHTML = "";
+                handlerContent.innerHTML = "";
+
+                if (data.ground_handlers.length > 0) {
+                    // ✅ Group handlers by name and collect multiple contact details
+                    const groupedHandlers = {};
+                    data.ground_handlers.forEach(handler => {
+                        if (!groupedHandlers[handler.handling_agent]) {
+                            groupedHandlers[handler.handling_agent] = [];
+                        }
+                        groupedHandlers[handler.handling_agent].push(handler);
+                    });
+
+                    let index = 0;
+                    for (const [handlerName, handlers] of Object.entries(groupedHandlers)) {
+                        let activeClass = index === 0 ? "active" : "";
+                        let showClass = index === 0 ? "show active" : "";
+
+                        // Create Tab for each unique ground handler
+                        handlerTabs.innerHTML += `
+                            <li class="nav-item">
+                                <a class="nav-link ${activeClass}" id="handler-tab-${index}" data-bs-toggle="tab" href="#handler-${index}">
+                                    ${handlerName}
+                                </a>
+                            </li>
+                        `;
+
+                        // Merge multiple contacts under the same handler
+                        let handlerDetails = handlers.map(handler => `
+                            <hr>
+                            <p><strong>Contact Person:</strong> ${handler.contact_person || '<span class="text-muted">General Contact</span>'}</p>
+                            <p><strong>Phone:</strong> ${handler.agent_contact || 'N/A'}</p>
+                            <p><strong>Primary Email:</strong> <a href="mailto:${handler.primary_email}">${handler.primary_email || 'N/A'}</a></p>
+                            ${handler.additional_contacts ? `
+                            <p><strong>Additional Emails:</strong><br>
+                                ${handler.additional_contacts.split(',').map(email => `<a href="mailto:${email.trim()}">${email.trim()}</a>`).join('<br>')}
+                            </p>
+                            ` : ''}
+                            <hr>
+                            <h5>⛽ Fueling Information</h5>
+                            <p>${handler.fuel_details || '<span class="text-muted">No fueling information available.</span>'}</p>
+                            <hr>
+                            {% if current_user.is_admin %}
+                            <button class="btn btn-warning btn-sm edit-handler-btn" data-handler-id="${handler.id}">
+                                ✏️ Edit Handler
+                            </button>
+                            {% endif %}
+                        `).join('');
+
+                        // Create Content for Tab
+                        handlerContent.innerHTML += `
+                            <div class="tab-pane fade ${showClass}" id="handler-${index}">
+                                <h4>${handlerName}</h4>
+                                ${handlerDetails}
+                            </div>
+                        `;
+
+                        index++;
+                    }
+
+                    // **Automatically trigger the first tab**
+                    document.getElementById("handler-tab-0").click();
+                } else {
+                    // If no ground handlers exist
+                    handlerTabs.innerHTML = `<li class="nav-item"><a class="nav-link active">No Ground Handlers</a></li>`;
+                    handlerContent.innerHTML = `<div class="tab-pane fade show active"><p>No ground handlers available.</p></div>`;
+                }
+            })
+            .catch(error => {
+                console.error("Error fetching port details:", error);
+                portTitle.innerHTML = `<p class="text-danger">Failed to load port details. Please try again.</p>`;
+            });
+    });
+
+    // Use event delegation to handle clicks on dynamically generated edit buttons
+    document.addEventListener("click", function (event) {
+    if (event.target.classList.contains("edit-handler-btn")) {
+        let handlerId = event.target.getAttribute("data-handler-id");
+
+        if (!handlerId || handlerId === "null" || handlerId === "undefined") {
+            alert("Error: Handler ID is missing.");
+            return;
+        }
+
+        // Fetch Handler Details
+        fetch(`/get_handler_details/${handlerId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert("Error fetching handler details.");
+                    return;
+                }
+
+                document.getElementById("editHandlerId").value = data.id;
+                document.getElementById("editHandlingAgent").value = data.handling_agent;
+                document.getElementById("editContactPerson").value = data.contact_person || '';
+                document.getElementById("editAgentContact").value = data.agent_contact || '';
+                document.getElementById("editPrimaryEmail").value = data.primary_email || '';
+                document.getElementById("editAdditionalEmails").value = data.additional_contacts || '';
+
+                // Initialize Bootstrap modal (prevents backdrop error)
+                let modalElement = document.getElementById("editHandlerModal");
+                let modalInstance = new bootstrap.Modal(modalElement);
+                modalInstance.show();
+            })
+            .catch(error => console.error("Error fetching handler data:", error));
+    }
+});
+
+
+    // Edit Ground Handler - Submit Changes
+    document.getElementById("editHandlerForm").addEventListener("submit", function (event) {
+        event.preventDefault();
+        const formData = new FormData(this);
+
+        fetch("/edit_handler", {
+            method: "POST",
+            body: formData
+        }).then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert("Error updating handler: " + data.error);
+            }
+        });
+    });
+});
+document.addEventListener("DOMContentLoaded", function () {
+    // Ensure "Add Port" button correctly initializes the modal
+    document.getElementById("addPortModal").addEventListener("shown.bs.modal", function () {
+        console.log("Add Port Modal is now visible.");
+    });
+
+    // Handle modal close to remove lingering backdrop
+    document.getElementById("addPortModal").addEventListener("hidden.bs.modal", function () {
+        console.log("Add Port Modal is now hidden.");
+        
+        // Remove lingering Bootstrap backdrop
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        
+        // Reset body overflow to prevent scrolling issues
+        document.body.classList.remove("modal-open");
+        document.body.style.overflow = "";
+    });
+
+    // Handle Add Port button click
+    document.querySelector("[data-bs-target='#addPortModal']").addEventListener("click", function () {
+        let modalElement = document.getElementById("addPortModal");
+        if (!modalElement) {
+            console.error("Error: Add Port Modal element not found.");
+            return;
+        }
+
+        // Initialize Bootstrap modal
+        let modalInstance = new bootstrap.Modal(modalElement);
+        modalInstance.show();
+    });
+});
+// Handle Add Port form submit
+document.getElementById("addPortForm").addEventListener("submit", function (event) {
+    event.preventDefault();
+    const formData = new FormData(this);
+
+    fetch("/add_port", {
+        method: "POST",
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert("✅ Port added successfully!");
+            location.reload();  // Refresh to see the new port in sidebar
+        } else {
+            alert("❌ Error adding port: " + data.error);
+        }
+    })
+    .catch(error => {
+        console.error("❌ Add Port Error:", error);
+        alert("❌ An error occurred while adding the port.");
+    });
+});
+let currentIataCode = "";
+
+document.getElementById("iataList").addEventListener("click", function (event) {
+    const item = event.target.closest(".iata-code");
+    if (!item) return;
+    
+    currentIataCode = item.getAttribute("data-port-id");
+    document.getElementById("handlerIataCode").value = currentIataCode;
+
+    const addBtn = document.getElementById("addHandlerBtn");
+    if (addBtn) {
+        addBtn.disabled = false;
+    }
+});
+
+document.getElementById("addHandlerForm").addEventListener("submit", function (event) {
+    event.preventDefault();
+    const formData = new FormData(this);
+
+    fetch("/add_handler", {
+        method: "POST",
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert("✅ Handler added successfully!");
+            location.reload();  // Refresh to show new handler
+        } else {
+            alert("❌ Failed to add handler: " + data.error);
+        }
+    })
+    .catch(error => {
+        console.error("❌ Error adding handler:", error);
+        alert("❌ An error occurred while adding handler.");
+    });
+});
+
+</script>
+
+{% endblock %}

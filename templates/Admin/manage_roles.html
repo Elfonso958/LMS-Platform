@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Manage Roles</h1>
+
+    <!-- Button to fetch new roles from Envision -->
+    <div class="mb-3">
+        <button id="fetch-roles-btn" class="btn btn-info">Fetch New Roles from Envision</button>
+    </div>
+
+    <!-- Loading bar -->
+    <div id="loading-bar" class="progress" style="display: none;">
+        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%;"></div>
+    </div>
+
+    <!-- Form to add a new role -->
+    <form method="POST" action="{{ url_for('manage_roles') }}">
+        <div class="form-group">
+            <label for="role_name">Role Name</label>
+            <input type="text" class="form-control" id="role_name" name="role_name" required>
+        </div>
+        <div class="form-group">
+            <label for="role_description">Role Description</label>
+            <input type="text" class="form-control" id="role_description" name="role_description" required>
+        </div>
+        <button type="submit" name="add_role" class="btn btn-primary">Add Role</button>
+    </form>
+
+    <!-- Existing roles table -->
+    <table class="table mt-4">
+        <thead>
+            <tr>
+                <th>Role Name</th>
+                <th>Role Description</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Render LMS roles first -->
+            {% for role in roles if not role.pulled_from_envision %}
+            <tr>
+                <td>{{ role.role_name }}</td>
+                <td>{{ role.role_description }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('manage_roles') }}" style="display:inline;">
+                        <input type="hidden" name="role_id" value="{{ role.roleID }}">
+                        <button type="submit" name="delete_role" class="btn btn-danger btn-sm">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            <!-- Render Envision roles next -->
+            {% for role in roles if role.pulled_from_envision %}
+            <tr class="table-warning">
+                <td>{{ role.role_name }}</td>
+                <td>{{ role.role_description }}</td>
+                <td>
+                    <span class="text-muted" data-toggle="tooltip" title="This role is pulled from Envision and can only be modified there.">Managed by Envision</span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Include jQuery -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- Include Bootstrap JS for tooltips -->
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+
+<script>
+$(document).ready(function(){
+  $('[data-toggle="tooltip"]').tooltip(); 
+
+  $('#fetch-roles-btn').click(function() {
+    $('#loading-bar').show();
+    $.ajax({
+      url: "{{ url_for('run_fetch_roles') }}",
+      method: 'GET',
+      success: function(response) {
+        $('#loading-bar').hide();
+        location.reload();
+      },
+      error: function(xhr, status, error) {
+        $('#loading-bar').hide();
+        alert('An error occurred while fetching roles.');
+      }
+    });
+  });
+});
+</script>
+{% endblock %}

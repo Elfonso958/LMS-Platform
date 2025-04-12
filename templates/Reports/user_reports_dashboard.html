@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}User Reports Dashboard{% endblock %}
+
+{% block content %}
+<style>
+    .report-container {
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+    }
+    .report-container h1 {
+        text-align: center;
+        color: #333;
+    }
+    .candidate-section {
+        margin-bottom: 50px;
+    }
+    .crew-check-section {
+        margin-bottom: 30px;
+    }
+    .chart-container {
+        width: 80%;
+        margin: 0 auto;
+    }
+    .chart-container canvas {
+        background-color: #f9f9f9;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 10px;
+        width: 100% !important;
+        height: 400px !important;
+    }
+    .section-title {
+        text-align: center;
+        margin-top: 20px;
+        color: #4CAF50;
+    }
+</style>
+
+<div class="report-container">
+    <h1>User Reports Dashboard</h1>
+    
+    {% if show_dropdown %}
+    <!-- Dropdown only visible to allowed roles -->
+    <form method="GET" action="{{ url_for('user_reports_dashboard') }}">
+        <div class="mb-3">
+            <label for="user_ids" class="form-label">Select Users</label>
+            <select class="form-control" id="user_ids" name="user_ids" multiple>
+                {% for user in users %}
+                <option value="{{ user.id }}">{{ user.username }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Generate Report</button>
+    </form>
+    {% else %}
+    <p class="text-center">You can only view your own report.</p>
+    {% endif %}
+    
+    {% if check_item_grades %}
+        {% for candidate, crewChecks in check_item_grades.items() %}
+            <div class="candidate-section">
+                <h2 class="section-title">{{ candidate }}</h2>
+                {% for crewCheck, items in crewChecks.items() %}
+                    <div class="crew-check-section">
+                        <h3 class="section-title">{{ crewCheck }}</h3>
+                        <div class="chart-container">
+                            <canvas id="chart_{{ candidate|replace(' ', '_') }}_{{ loop.index }}"></canvas>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    {% endif %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var checkItemGrades = {{ check_item_grades|tojson }};
+    
+    // Loop over each candidate
+    for (var candidate in checkItemGrades) {
+        var crewChecks = checkItemGrades[candidate];
+        var crewIndex = 1;
+        for (var crewCheck in crewChecks) {
+            var items = crewChecks[crewCheck];
+            var labels = [];
+            var dataValues = [];
+            
+            for (var checkItem in items) {
+                labels.push(checkItem);
+                dataValues.push(items[checkItem].average_grade);
+            }
+            
+            var canvasId = 'chart_' + candidate.replace(/ /g, '_') + '_' + crewIndex;
+            var ctx = document.getElementById(canvasId).getContext('2d');
+            
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Average Grade',
+                        data: dataValues,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Average Grade' }
+                        },
+                        x: {
+                            title: { display: true, text: 'Check Items' }
+                        }
+                    }
+                }
+            });
+            crewIndex++;
+        }
+    }
+});
+</script>
+{% endblock %}

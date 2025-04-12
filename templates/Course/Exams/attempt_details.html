@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Exam Attempt Details</h1>
+    <h2>User: {{ attempt.user.username }}</h2>
+    <h2>Course: {{ attempt.course.title }}</h2>
+    <h3>Score: {{ attempt.score }}%</h3>
+    <h3>Status: {{ 'Passed' if attempt.passed else 'Failed' }}</h3>
+
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Question</th>
+                <th>Correct Answer</th>
+                <th>User's Answer</th>
+                <th>Result</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for result in detailed_results %}
+            <tr>
+                <td>{{ result.question_text }}</td>
+                <td>{{ result.correct_answer | join(', ') }}</td>
+                <td>{{ result.user_answer }}</td>
+                <td>
+                    {% if result.is_correct %}
+                    <span class="text-success">Correct</span>
+                    {% else %}
+                    <span class="text-danger">Incorrect</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

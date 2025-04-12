@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Add Items to Line Training Form{% endblock %}
+
+{% block content %}
+<h1>{{ form.name }}</h1>
+
+<h3>Topics</h3>
+<form method="POST">
+    <div class="mb-3">
+        <label for="topic_name" class="form-label">New Topic</label>
+        <input type="text" class="form-control" name="topic_name" required>
+    </div>
+    <button type="submit" name="add_topic" class="btn btn-secondary">Add Topic</button>
+</form>
+
+<!-- Display Topics -->
+<div class="mt-4">
+    {% for topic in topics %}
+    <div class="accordion" id="topic{{ topic.id }}">
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="heading{{ topic.id }}">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ topic.id }}" aria-expanded="true" aria-controls="collapse{{ topic.id }}">
+                    {{ topic.name }}
+                </button>
+            </h2>
+            <div id="collapse{{ topic.id }}" class="accordion-collapse collapse show" aria-labelledby="heading{{ topic.id }}" data-bs-parent="#topic{{ topic.id }}">
+                <div class="accordion-body">
+                    <!-- Add Task Form -->
+                    <form method="POST">
+                        <input type="text" name="task_name" placeholder="Task Name" required>
+                        <textarea name="task_notes" placeholder="Trainer Notes" class="form-control" rows="3"></textarea>
+                        <input type="hidden" name="topic_id" value="{{ topic.id }}">
+                        <button type="submit" name="add_task" class="btn btn-primary mt-2">Add Task</button>
+                    </form>
+
+                    <!-- Display Tasks in Table Form -->
+                    <table class="table table-bordered mt-4">
+                        <thead>
+                            <tr>
+                                <th>Task Item</th>
+                                <th>Trainer Notes</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for task in topic.tasks %}
+                            <tr id="task_{{ task.id }}">
+                                <td id="task_name_{{ task.id }}">
+                                    {% if task.editing %}
+                                    <input type="text" name="task_name" value="{{ task.name }}" class="form-control">
+                                    <input type="hidden" name="task_id" value="{{ task.id }}"> <!-- Hidden Task ID -->
+                                    {% else %}
+                                    {{ task.name }}
+                                    {% endif %}
+                                </td>
+                                <td id="task_notes_{{ task.id }}">
+                                    {% if task.editing %}
+                                    <textarea name="task_notes" class="form-control">{{ task.notes|trim }}</textarea>
+                                    {% else %}
+                                    {{ task.notes }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <!-- Edit button (toggles between edit and save) -->
+                                    <button type="button" class="btn btn-info btn-sm" onclick="toggleEditTask('{{ task.id }}')">
+                                        {% if task.editing %} Save {% else %} Edit {% endif %}
+                                    </button>
+
+                                    <!-- Delete Task -->
+                                    <form action="{{ url_for('delete_task', task_id=task.id) }}" method="POST" style="display:inline;">
+                                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this task?')">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+function toggleEditTask(taskId) {
+    var taskNameCell = document.getElementById('task_name_' + taskId);
+    var taskNotesCell = document.getElementById('task_notes_' + taskId);
+    var taskRow = document.getElementById('task_' + taskId);
+    var editButton = taskRow.querySelector('.btn-info');
+
+    if (taskNameCell.querySelector('input')) {
+        // Save mode
+        var taskName = taskNameCell.querySelector('input').value.trim();
+        var taskNotes = taskNotesCell.querySelector('textarea').value.trim();
+
+        // Perform AJAX request to update the task in the database
+        fetch(`/update_template_task/${taskId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ task_name: taskName, task_notes: taskNotes })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update the table with the saved data
+                taskNameCell.innerHTML = taskName.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                taskNotesCell.innerHTML = taskNotes.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                editButton.textContent = "Edit";
+            } else {
+                alert('Failed to save task.');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+        });
+    } else {
+        // Edit mode
+        var currentTaskName = taskNameCell.innerHTML.trim();
+        var currentTaskNotes = taskNotesCell.innerHTML.trim();
+
+        // Escape current values for safe insertion into HTML
+        currentTaskName = currentTaskName.replace(/"/g, '&quot;');
+        currentTaskNotes = currentTaskNotes.replace(/"/g, '&quot;');
+
+        taskNameCell.innerHTML = `<input type="text" name="task_name" value="${currentTaskName}" class="form-control">`;
+        taskNotesCell.innerHTML = `<textarea name="task_notes" class="form-control">${currentTaskNotes}</textarea>`;
+        editButton.textContent = "Save";
+    }
+}
+</script>
+
+{% endblock %}

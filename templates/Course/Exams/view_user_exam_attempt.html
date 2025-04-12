@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Exam Attempt Details</h1>
+    <p><strong>User:</strong> {{ attempt.user.username }}</p>
+    <p><strong>Score:</strong> {{ attempt.score }}%</p>
+    <p><strong>Passed:</strong> {{ 'Yes' if attempt.passed else 'No' }}</p>
+    <p><strong>Date:</strong> {{ attempt.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+
+    <hr>
+
+    <h2>Questions and Answers</h2>
+    <ul class="list-group">
+        {% for entry in detailed_answers %}
+        <li class="list-group-item">
+            <strong>Q{{ loop.index }}: {{ entry.question.text }}</strong>
+            <ul>
+                {% for answer in entry.answers %}
+                <li>
+                    <strong>{{ loop.index }}.</strong> {{ answer.text }}
+                    {% if answer.id == entry.user_answer_id %}
+                    <strong>(User's choice)</strong>
+                    {% endif %}
+                    {% if answer.is_correct %}
+                    <span class="text-success">(Correct)</span>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+            {% if entry.is_correct %}
+            <p class="text-success"><strong>You answered correctly!</strong></p>
+            {% else %}
+            <p class="text-danger"><strong>You answered incorrectly.</strong></p>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

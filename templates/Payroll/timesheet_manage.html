@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+    <h1>Manage Timesheets</h1>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>User</th>
+                <th>Date</th>
+                <th>Hours Worked</th>
+                <th>Description</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for timesheet in timesheets %}
+            <tr>
+                <td>{{ timesheet.user.username }}</td>
+                <td>{{ timesheet.date }}</td>
+                <td>{{ timesheet.hours_worked }}</td>
+                <td>{{ timesheet.description }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('update_timesheet_status', timesheet_id=timesheet.id, action='Approved') }}">
+                        <button class="btn btn-success btn-sm">Approve</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('update_timesheet_status', timesheet_id=timesheet.id, action='Rejected') }}">
+                        <button class="btn btn-danger btn-sm">Reject</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

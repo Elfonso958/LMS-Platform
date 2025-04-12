@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+
+    <!-- Manage Courses Header -->
+    <h1 class="mb-4">Manage Courses</h1>
+
+    <!-- Collapsible Add New Course Form -->
+    <div class="row mb-5">
+        <div class="col-lg-8 mx-auto">
+            <div class="card shadow">
+                <div class="card-header" id="headingAddCourse">
+                    <h2 class="mb-0">
+                        <button class="btn btn-link text-decoration-none w-100 text-start" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAddCourse" aria-expanded="true" aria-controls="collapseAddCourse">
+                            Add New Course
+                        </button>
+                    </h2>
+                </div>
+
+                <div id="collapseAddCourse" class="collapse" aria-labelledby="headingAddCourse" data-bs-parent="#accordionExample">
+                    <div class="card-body">
+                        <form method="POST" enctype="multipart/form-data" action="{{ url_for('manage_courses') }}">
+                            <div class="row">
+                                <!-- Course Title -->
+                                <div class="col-md-6 mb-3">
+                                    <label for="title" class="form-label">Course Title</label>
+                                    <input type="text" class="form-control" id="title" name="title" required>
+                                </div>
+
+                                <!-- Description -->
+                                <div class="col-md-6 mb-3">
+                                    <label for="description" class="form-label">Description</label>
+                                    <textarea class="form-control" id="description" name="description" rows="3" required></textarea>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <!-- Assign to Roles -->
+                                <div class="col-md-6 mb-3">
+                                    <label for="role_type_ids" class="form-label">Assign to Roles</label>
+                                    <select class="form-select" id="role_type_ids" name="role_type_ids" multiple required>
+                                        {% for role in roles %}
+                                        <option value="{{ role.roleID }}">{{ role.role_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="form-text text-muted">Hold down the Ctrl (Windows) or Command (Mac) key to select multiple roles.</small>
+                                </div>
+
+                                <!-- Upload PowerPoint -->
+                                <div class="col-md-6 mb-3">
+                                    <label for="ppt_file" class="form-label">Upload PowerPoint</label>
+                                    <input type="file" class="form-control" id="ppt_file" name="ppt_file" accept=".pptx" required>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <!-- Passing Mark -->
+                                <div class="col-md-6 mb-3">
+                                    <label for="passing_mark" class="form-label">Passing Mark (%)</label>
+                                    <input type="number" class="form-control" id="passing_mark" name="passing_mark" min="0" max="100" required>
+                                </div>
+
+                                <!-- Validity Period -->
+                                <div class="col-md-6 mb-3">
+                                    <label for="valid_for_days" class="form-label">Course Validity (Days)</label>
+                                    <input type="number" class="form-control" id="valid_for_days" name="valid_for_days" min="1" value="{{ course.valid_for_days if course else 365 }}" required>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <!-- Available Before Expiry -->
+                                <div class="col-md-6 mb-3">
+                                    <label for="available_before_expiry_days" class="form-label">Available Before (days)</label>
+                                    <input type="number" class="form-control" id="available_before_expiry_days" name="available_before_expiry_days" min="0" value="30" required>
+                                </div>
+
+                                <!-- Has Exam -->
+                                <div class="col-md-6 mb-3">
+                                    <div class="form-check mt-4">
+                                        <input class="form-check-input" type="checkbox" id="has_exam" name="has_exam" value="1">
+                                        <label class="form-check-label" for="has_exam">This course includes an exam</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <button type="submit" class="btn btn-primary btn-lg w-100">Create Course</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <hr>
+
+    <!-- Collapsible Existing Courses Section -->
+    <div class="accordion" id="existingCoursesAccordion">
+        {% for course in courses %}
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="headingCourse{{ course.id }}">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCourse{{ course.id }}" aria-expanded="true" aria-controls="collapseCourse{{ course.id }}">
+                    {{ course.title }}
+                </button>
+            </h2>
+            <div id="collapseCourse{{ course.id }}" class="accordion-collapse collapse" aria-labelledby="headingCourse{{ course.id }}" data-bs-parent="#existingCoursesAccordion">
+                <div class="accordion-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <p><strong>Description:</strong> {{ course.description }}</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p><strong>Roles Assigned:</strong>
+                                {% for role in course.roles %}
+                                    {{ role.role_name }}{% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                            </p>
+                        </div>
+                        <div class="col-md-4">
+                            <p><strong>Passing Mark:</strong> {{ course.passing_mark }}%</p>
+                        </div>
+                    </div>
+    
+                    <div class="row">
+                        <div class="col-md-4">
+                            <p><strong>Validity Period:</strong> {{ course.valid_for_days }} days</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p><strong>Available Before:</strong> {{ course.available_before_expiry_days }} days</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p class="d-flex align-items-center">
+                                <strong>Has Exam:</strong>
+                                <input type="checkbox" {% if course.has_exam %}checked{% endif %} disabled class="ms-2">
+                            </p>
+                        </div>
+                    </div>
+    
+                    <!-- Action Buttons in a 3x3 Grid -->
+                    <div class="row text-center mt-4">
+                        <div class="col-md-4 mb-3">
+                            <a href="{{ url_for('view_course', course_id=course.id) }}" class="btn btn-info btn-lg w-100">View Course</a>
+                        </div>
+                        
+                        {% if course.has_exam %}
+                            <div class="col-md-4 mb-3">
+                                <a href="{{ url_for('manage_questions', course_id=course.id) }}" class="btn btn-secondary btn-lg w-100">Questions</a>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <a href="{{ url_for('view_exam_attempts', course_id=course.id) }}" class="btn btn-success btn-lg w-100">Attempts</a>
+                            </div>
+                        {% else %}
+                            <div class="col-md-4 mb-3">
+                                <a href="{{ url_for('view_completed_users', course_id=course.id) }}" class="btn btn-success btn-lg w-100">Completed</a>
+                            </div>
+                        {% endif %}
+                        
+                        <div class="col-md-4 mb-3">
+                            <a href="{{ url_for('edit_course', course_id=course.id) }}" class="btn btn-warning btn-lg w-100">Edit</a>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <form method="POST" action="{{ url_for('delete_course', course_id=course.id) }}" style="display:inline;">
+                                <button type="submit" class="btn btn-danger btn-lg w-100" onclick="return confirm('Are you sure you want to delete this course?')">Delete</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>    
+</div>
+{% endblock %}

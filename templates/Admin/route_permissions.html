@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Route Permissions{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Manage Route Permissions</h1>
+    
+    <form method="POST">
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Route</th>
+                    <th>Methods</th>
+                    <th>Allowed Roles</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for route in all_routes %}
+                <tr>
+                    <td>{{ route.url }}</td>
+                    <td>{{ ", ".join(route.methods) }}</td>
+                    <td>
+                        <select name="roles_{{ route.endpoint }}" class="form-select" multiple>
+                            {% for role in all_roles %}
+                            <option value="{{ role.roleID }}"
+                                {% if route.endpoint in permission_map and role.roleID in permission_map[route.endpoint] %}
+                                    selected
+                                {% endif %}
+                            >
+                                {{ role.role_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <button type="submit" class="btn btn-primary">Save Permissions</button>
+    </form>
+</div>
+{% endblock %}

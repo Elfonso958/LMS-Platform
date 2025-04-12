@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Create Crew Check{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Create Crew Check</h1>
+    <form action="{{ url_for('create_crew_check') }}" method="POST">
+        <div class="mb-3">
+            <label for="name" class="form-label">Check Name</label>
+            <input type="text" class="form-control" id="name" name="name" required>
+        </div>
+        <div class="mb-3">
+            <label for="roles" class="form-label">Assign Roles</label>
+            <select class="form-select" id="roles" name="roles" multiple>
+                {% for role in roles %}
+                <option value="{{ role.roleID }}">{{ role.role_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Create Check</button>
+    </form>
+</div>
+{% endblock %}

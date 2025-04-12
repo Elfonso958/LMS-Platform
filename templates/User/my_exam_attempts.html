@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>My Exam Attempts</h1>
+
+    {% if attempts %}
+        <table class="table table-bordered table-hover mt-4">
+            <thead>
+                <tr>
+                    <th>Course</th>
+                    <th>Date</th>
+                    <th>Score</th>
+                    <th>Result</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for attempt in attempts %}
+                    <tr>
+                        <td>{{ attempt.course.title }}</td>
+                        <td>{{ attempt.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ attempt.score }}%</td>
+                        <td>
+                            {% if attempt.passed %}
+                                <span class="text-success">Passed</span>
+                            {% else %}
+                                <span class="text-danger">Failed</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('view_my_exam_attempt', attempt_id=attempt.id) }}" class="btn btn-info btn-sm">View Answers</a>
+                            {% if attempt.passed %}
+                                <a href="{{ url_for('view_certificate', attempt_id=attempt.id) }}" class="btn btn-success btn-sm">View Certificate</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>You have no exam attempts yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

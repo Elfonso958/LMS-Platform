@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Admin Dashboard</h1>
+    <p>Logged in as: {{ current_user.username }}</p>
+
+    <h2>Admin Tools</h2>
+    <ul class="list-group mb-4">
+        {% for tool in admin_tools %}
+        <li class="list-group-item">
+            <a href="{{ tool.url }}" class="btn btn-primary">{{ tool.name }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+
+    <h2>Courses</h2>
+    <ul class="list-group">
+        {% for course in courses %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>{{ course.title }}</strong>
+            <a href="{{ url_for('view_exam_attempts', course_id=course.id) }}" class="btn btn-info btn-sm">
+                View Exam Attempts
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

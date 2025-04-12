@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4 text-center">👥 Manage Users</h1>
+
+    <!-- Add User Button -->
+    <div class="text-end mb-4">
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addUserModal">
+            ➕ Add User
+        </button>
+    </div>
+
+    <!-- User Search & Role Filter -->
+    <form method="GET" action="{{ url_for('manage_users') }}" class="row g-3 mb-4">
+        <div class="col-md-4">
+            <input type="text" name="name_filter" class="form-control" placeholder="🔍 Search by name..." value="{{ name_filter }}">
+        </div>
+        <div class="col-md-3">
+            <select name="role_filter" class="form-select">
+                <option value="" {% if not role_filter %}selected{% endif %}>All Roles</option>
+                {% for role in roles %}
+                    <option value="{{ role.roleID }}" {% if role_filter == role.roleID|string %}selected{% endif %}>
+                        {{ role.role_name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select name="status_filter" class="form-select">
+                <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active Users</option>
+                <option value="archived" {% if status_filter == 'archived' %}selected{% endif %}>Archived Users</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">Filter</button>
+        </div>
+    </form>
+    
+    <hr>
+
+    <!-- Display Users in a Table -->
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Username</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Phone</th>
+                    <th scope="col">Job Title</th>
+                    <th scope="col">Manager</th>
+                    <th scope="col">Roles</th>
+                    <th scope="col">Auth Type</th>
+                    <th scope="col" class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('user_profile', user_id=user.id) }}" class="text-decoration-none">
+                            {{ user.username }}
+                        </a>
+                    </td>
+                    <td>{{ user.email }}</td>
+                    <td>{{ user.phone_number if user.phone_number else 'N/A' }}</td>
+                    <td>{{ user.job_title.title if user.job_title else 'Not Assigned' }}</td>
+                    <td>
+                        {% if user.job_title and user.job_title.parent_job and user.job_title.parent_job.manager %}
+                            {{ user.job_title.parent_job.manager.username }}
+                        {% else %}
+                            No Manager
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% set max_roles = 3 %}
+                        {% for role in user.roles[:max_roles] %}
+                          <span class="badge bg-info">{{ role.role_name }}</span>
+                        {% endfor %}
+                        {% if user.roles|length > max_roles %}
+                          <span class="badge bg-secondary" 
+                                data-bs-toggle="popover" 
+                                data-bs-trigger="hover focus" 
+                                data-bs-html="true"
+                                data-bs-content="
+                                  {% for role in user.roles[max_roles:] %}
+                                    <div>{{ role.role_name }}</div>
+                                  {% endfor %}
+                                ">
+                            +{{ user.roles|length - max_roles }} more
+                          </span>
+                        {% endif %}
+                      </td>
+                      
+                    <td>
+                        <span class="badge bg-secondary">{{ user.auth_type | capitalize }}</span>
+                    </td>
+                    <td class="text-center">
+                        {% if user.is_active %}
+                        <form method="POST" action="{{ url_for('archive_user', user_id=user.id) }}" class="d-inline">
+                            <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('Archive this user?')">
+                                📁 Archive
+                            </button>
+                        </form>
+                        {% else %}
+                        <form method="POST" action="{{ url_for('reinstate_user', user_id=user.id) }}" class="d-inline">
+                            <button type="submit" class="btn btn-success btn-sm">
+                                🔄 Reinstate
+                            </button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Add User Modal with Tabbed Form -->
+    <div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="addUserModalLabel">➕ Add New User</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form id="addUserForm" method="POST" action="{{ url_for('manage_users') }}">
+                    <div class="modal-body">
+                        <!-- Nav tabs -->
+                        <ul class="nav nav-tabs" id="userFormTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="personal-tab" data-bs-toggle="tab" data-bs-target="#personal" type="button" role="tab">
+                                    👤 Personal Info
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="employment-tab" data-bs-toggle="tab" data-bs-target="#employment" type="button" role="tab">
+                                    💼 Employment
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="emergency-tab" data-bs-toggle="tab" data-bs-target="#emergency" type="button" role="tab">
+                                    🆘 Emergency
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="license-tab" data-bs-toggle="tab" data-bs-target="#license" type="button" role="tab">
+                                    ✈️ License/Medical
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="auth-tab" data-bs-toggle="tab" data-bs-target="#auth" type="button" role="tab">
+                                    🔐 Authentication
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="roles-tab" data-bs-toggle="tab" data-bs-target="#roles" type="button" role="tab">
+                                    🏷 Roles
+                                </button>
+                            </li>
+                        </ul>
+
+                        <!-- Tab panes -->
+                        <div class="tab-content pt-3" id="userFormTabsContent">
+                            <!-- Personal Info Tab -->
+                            <div class="tab-pane fade show active" id="personal" role="tabpanel">
+                                <div class="mb-3">
+                                    <label for="username" class="form-label">Full Name</label>
+                                    <input type="text" class="form-control" id="username" name="username" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="email" class="form-label">Email</label>
+                                    <input type="email" class="form-control" id="email" name="email" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="phone_number" class="form-label">Phone Number</label>
+                                    <input type="text" class="form-control" id="phone_number" name="phone_number">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="address" class="form-label">Address</label>
+                                    <input type="text" class="form-control" id="address" name="address">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="date_of_birth" class="form-label">Date of Birth</label>
+                                    <input type="date" class="form-control" id="date_of_birth" name="date_of_birth">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="crew_code" class="form-label">Envision Crew Code</label>
+                                    <input type="text" class="form-control" id="crew_code" name="crew_code">
+                                </div>                                
+                            </div>
+
+                            <!-- Employment Tab -->
+                            <div class="tab-pane fade" id="employment" role="tabpanel">
+                                <!-- Job Title Dropdown -->
+                                <div class="mb-3">
+                                    <label for="job_title" class="form-label">Job Title</label>
+                                    <select class="form-select" id="job_title" name="job_title_id" onchange="updateReportsTo();">
+                                        <option value="">-- Select Job Title --</option>
+                                        {% for job in job_titles %}
+                                            <option value="{{ job.id }}" 
+                                                    data-reports-to="{{ job.parent_job.title if job.parent_job else '' }}" 
+                                                    data-manager="{{ job.parent_job.manager.username if job.parent_job and job.parent_job.manager else '' }}">
+                                                {{ job.title }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="reports_to" class="form-label">Reports To:</label>
+                                    <input type="text" id="reports_to" class="form-control text-truncate" value="Not Assigned" readonly>
+                                </div>                                
+
+                                <!-- Location Dropdown -->
+                                <div class="mb-3">
+                                    <label for="location_id" class="form-label">Location</label>
+                                    <select class="form-select" id="location_id" name="location_id">
+                                        <option value="">-- Select Location --</option>
+                                        {% for location in locations %}
+                                            <option value="{{ location.id }}">{{ location.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Emergency Tab -->
+                            <div class="tab-pane fade" id="emergency" role="tabpanel">
+                                <div class="mb-3">
+                                    <label for="next_of_kin" class="form-label">Next of Kin</label>
+                                    <input type="text" class="form-control" id="next_of_kin" name="next_of_kin">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="kin_phone_number" class="form-label">Next of Kin Phone</label>
+                                    <input type="text" class="form-control" id="kin_phone_number" name="kin_phone_number">
+                                </div>
+                            </div>
+
+                            <!-- License/Medical Tab -->
+                            <div class="tab-pane fade" id="license" role="tabpanel">
+                                <div class="mb-3">
+                                    <label for="license_type" class="form-label">License Type</label>
+                                    <select class="form-select" id="license_type" name="license_type">
+                                        <option value="CPL">CPL</option>
+                                        <option value="ATPL">ATPL</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="license_number" class="form-label">License Number</label>
+                                    <input type="text" class="form-control" id="license_number" name="license_number">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="medical_expiry" class="form-label">Medical Expiry</label>
+                                    <input type="date" class="form-control" id="medical_expiry" name="medical_expiry">
+                                </div>
+                            </div>
+
+                            <!-- Authentication Tab -->
+                            <div class="tab-pane fade" id="auth" role="tabpanel">
+                                <div class="mb-3">
+                                    <label for="auth_type" class="form-label">Auth Type</label>
+                                    <select class="form-select" id="auth_type" name="auth_type" onchange="toggleAuthFields()">
+                                        <option value="local">Local Authentication</option>
+                                        <option value="envision">Envision API</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3" id="passwordField">
+                                    <label for="password" class="form-label">Password</label>
+                                    <input type="password" class="form-control" id="password" name="password">
+                                </div>
+                                <div class="mb-3" id="envisionFields" style="display: none;">
+                                    <label for="crew_code" class="form-label">Envision Crew Code</label>
+                                    <input type="text" class="form-control" id="crew_code" name="crew_code">
+                                </div>
+                            </div>
+
+                            <!-- Roles Tab -->
+                            <div class="tab-pane fade" id="roles" role="tabpanel">
+                                <div class="mb-3">
+                                    <label for="rolesSelect" class="form-label">Assign Roles</label>
+                                    <select multiple class="form-select" id="rolesSelect" name="role_ids[]">
+                                        {% for role in roles %}
+                                            <option value="{{ role.roleID }}">{{ role.role_name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <small class="form-text text-muted">Hold Ctrl (Windows) or Command (Mac) to select multiple roles.</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success">✅ Add User</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleAuthFields() {
+        var authType = document.getElementById("auth_type").value;
+        var passwordField = document.getElementById("passwordField");
+        var envisionFields = document.getElementById("envisionFields");
+
+        if (authType === "local") {
+            passwordField.style.display = "block";
+            envisionFields.style.display = "none";
+        } else {
+            passwordField.style.display = "none";
+            envisionFields.style.display = "block";
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        toggleAuthFields();
+    });
+
+    // Listen for invalid events on form inputs (capture phase)
+    document.getElementById("addUserForm").addEventListener("invalid", function(e) {
+        e.preventDefault(); // Prevent default behavior
+        const invalidField = e.target;
+        // Check if the invalid field is in a hidden tab pane
+        const tabPane = invalidField.closest(".tab-pane");
+        if (tabPane && !tabPane.classList.contains("active")) {
+            // Find the corresponding tab button using the data-bs-target attribute
+            const tabId = tabPane.id;
+            const tabTrigger = document.querySelector('[data-bs-target="#' + tabId + '"]');
+            if (tabTrigger) {
+                // Activate the tab
+                const tabInstance = new bootstrap.Tab(tabTrigger);
+                tabInstance.show();
+            }
+        }
+        // Focus the invalid field once it becomes visible
+        invalidField.focus();
+    }, true);
+
+    // Function to update the status of a given tab based on its required fields
+    function updateTabStatus(tabPaneId) {
+        const tabPane = document.getElementById(tabPaneId);
+        const requiredFields = tabPane.querySelectorAll('input[required], select[required], textarea[required]');
+        let allValid = true;
+        requiredFields.forEach(field => {
+            if (!field.checkValidity()) {
+                allValid = false;
+            }
+        });
+        // Find the corresponding tab button using data-bs-target attribute
+        const tabButton = document.querySelector('[data-bs-target="#' + tabPaneId + '"]');
+        if (allValid && requiredFields.length > 0) {
+            // Add a class or change style when valid
+            tabButton.classList.add('text-success');
+            tabButton.style.borderBottom = '3px solid green';
+        } else {
+            // Remove the valid indication if not all fields are valid
+            tabButton.classList.remove('text-success');
+            tabButton.style.borderBottom = '';
+        }
+    }
+
+    // Instead of using "input" events, listen for "blur" events on required fields
+    document.querySelectorAll('.tab-pane').forEach(tabPane => {
+        tabPane.querySelectorAll('input[required], select[required], textarea[required]').forEach(field => {
+            field.addEventListener('blur', function() {
+                updateTabStatus(tabPane.id);
+            });
+        });
+    });
+
+    // Optionally update all tabs once the DOM is loaded (in case some fields are pre-filled)
+    document.addEventListener("DOMContentLoaded", function() {
+        document.querySelectorAll('.tab-pane').forEach(tabPane => {
+            updateTabStatus(tabPane.id);
+        });
+    });
+
+    // Initialize Bootstrap popovers
+    document.addEventListener("DOMContentLoaded", function () {
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+        var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+            return new bootstrap.Popover(popoverTriggerEl)
+        });
+    });
+    function updateReportsTo() {
+    let jobTitleDropdown = document.getElementById("job_title");
+    let selectedOption = jobTitleDropdown.options[jobTitleDropdown.selectedIndex];
+
+    let reportsToField = document.getElementById("reports_to");
+    let reportsToValue = (selectedOption.getAttribute("data-reports-to") || "Not Assigned").trim();
+    let managerValue = (selectedOption.getAttribute("data-manager") || "No Manager Assigned").trim();
+
+    reportsToField.value = `${reportsToValue} - ${managerValue}`.trim();
+}
+
+</script>
+
+{% endblock %}

@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Check Items{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Manage Check Items for {{ crew_check.name }}</h1>
+
+    <!-- Add Item Form -->
+    <form action="{{ url_for('add_check_item', check_id=crew_check.id) }}" method="POST">
+        <div class="mb-3">
+            <label for="item_name" class="form-label">Item Name</label>
+            <input type="text" class="form-control" id="item_name" name="item_name" required>
+        </div>
+        <div class="form-check mb-3">
+            <input type="checkbox" class="form-check-input" id="mandatory" name="mandatory">
+            <label class="form-check-label" for="mandatory">Mandatory</label>
+        </div>
+        <div class="mb-3">
+            <label for="manual_link" class="form-label">Manual Link</label>
+            <input type="text" class="form-control" id="manual_link" name="manual_link">
+        </div>
+        <div class="mb-3">
+            <label for="additional_info" class="form-label">Additional Information</label>
+            <input type="text" class="form-control" id="additional_info" name="additional_info">
+        </div>
+        <button type="submit" class="btn btn-primary">Add Item</button>
+    </form>
+
+    <hr>
+
+    <!-- Tab Navigation -->
+    <ul class="nav nav-tabs mt-4" id="checkItemTabs">
+        <li class="nav-item">
+            <a class="nav-link active" id="active-tab" data-bs-toggle="tab" href="#active-items">Active Items</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="deleted-tab" data-bs-toggle="tab" href="#deleted-items">Deleted Items</a>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content mt-3">
+        <!-- Active Items Tab -->
+        <div class="tab-pane fade show active" id="active-items">
+            <h2>Active Check Items</h2>
+            {% if check_items %}
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Order</th>
+                        <th>Item Name</th>
+                        <th>Mandatory</th>
+                        <th>Manual Link</th>
+                        <th>Additional Information</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="sortable-items">
+                    {% for item in check_items | sort(attribute='order') if not item.deleted %}
+                    <tr id="item-row-{{ item.id }}" data-item-id="{{ item.id }}">
+                        <td class="drag-handle">☰</td>
+                        <td>{{ item.item_name }}</td>
+                        <td>{{ 'Yes' if item.mandatory else 'No' }}</td>
+                        <td>
+                            {% if item.manual_link %}
+                                <a href="{{ item.manual_link }}" target="_blank">View Link</a>
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td>{{ item.additional_info }}</td>
+                        <td>
+                            <button class="btn btn-warning btn-sm" onclick="openEditModal({{ item.id }})">Edit</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteCheckItem({{ item.id }})">Delete</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+                <p class="text-muted">No check items have been added yet.</p>
+            {% endif %}
+        </div>
+
+        <!-- Deleted Items Tab -->
+        <div class="tab-pane fade" id="deleted-items">
+            <h2>Deleted Check Items</h2>
+            {% if check_items %}
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Item Name</th>
+                            <th>Mandatory</th>
+                            <th>Manual Link</th>
+                            <th>Additional Information</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in check_items if item.deleted %}
+                        <tr id="deleted-item-row-{{ item.id }}">
+                            <td>{{ item.id }}</td>
+                            <td>{{ item.item_name }}</td>
+                            <td>{{ 'Yes' if item.mandatory else 'No' }}</td>
+                            <td>
+                                {% if item.manual_link %}
+                                    <a href="{{ item.manual_link }}" target="_blank">View Link</a>
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>{{ item.additional_info }}</td>
+                            <td>
+                                <button class="btn btn-success btn-sm" onclick="restoreCheckItem({{ item.id }})">Restore</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="text-muted">No deleted check items available.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Edit Item Modal -->
+<div class="modal fade" id="editItemModal" tabindex="-1" aria-labelledby="editItemModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editItemModalLabel">Edit Check Item</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="editItemForm">
+          <input type="hidden" id="edit_item_id" name="item_id">
+          <div class="mb-3">
+            <label for="edit_item_name" class="form-label">Item Name</label>
+            <input type="text" class="form-control" id="edit_item_name" name="item_name" required>
+          </div>
+          <div class="form-check mb-3">
+            <input type="checkbox" class="form-check-input" id="edit_mandatory" name="mandatory">
+            <label class="form-check-label" for="edit_mandatory">Mandatory</label>
+          </div>
+          <div class="mb-3">
+            <label for="edit_manual_link" class="form-label">Manual Link</label>
+            <input type="text" class="form-control" id="edit_manual_link" name="manual_link">
+          </div>
+          <div class="mb-3">
+            <label for="edit_additional_info" class="form-label">Additional Information</label>
+            <input type="text" class="form-control" id="edit_additional_info" name="additional_info">
+          </div>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JavaScript for Drag-and-Drop Sorting -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    console.log("🚀 Drag-and-Drop Sorting Initialized"); // ✅ Debugging: Check if script loads
+
+    var sortableList = document.getElementById("sortable-items");
+    
+    if (!sortableList) {
+        console.error("❌ Error: sortable-items element not found!");
+        return; // Stop execution if the element is missing
+    }
+
+    var sortable = new Sortable(sortableList, {
+        handle: ".drag-handle",
+        animation: 150,
+        onEnd: function(evt) {
+            console.log("✅ Item Moved!", evt); // ✅ Debugging: Check if drag event fires
+
+            var itemOrder = [];
+            document.querySelectorAll("#sortable-items tr").forEach((row, index) => {
+                var itemId = row.getAttribute("data-item-id");
+                itemOrder.push({
+                    id: itemId,  // Capture the item's ID
+                    order: index // Assign the new order based on position
+                });
+            });
+
+            console.log("📤 Sending Order Update to Flask:", itemOrder); // ✅ Debugging: Verify data before sending
+
+            fetch("/update_check_item_order", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest"
+                },
+                body: JSON.stringify({ items: itemOrder })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log("✅ Server Response:", data); // ✅ Debugging: Check server response
+                if (!data.success) {
+                    alert("⚠️ Error: " + data.message);
+                }
+            })
+            .catch(error => console.error("❌ Fetch Error:", error));
+        }
+    });
+});
+
+function deleteCheckItem(itemId) {
+    if (!confirm("Are you sure you want to delete this check item?")) {
+        return;
+    }
+
+    fetch(`/delete_check_item/${itemId}`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Requested-With": "XMLHttpRequest"
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.text().then(text => { throw new Error(text) });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            document.getElementById(`item-row-${itemId}`).remove();
+        } else {
+            alert("⚠️ Error: " + data.message);
+        }
+    })
+    .catch(error => {
+        console.error("❌ Fetch Error:", error);
+        alert("⚠️ Error: " + error.message);
+    });
+}
+
+function restoreCheckItem(itemId) {
+    fetch(`/restore_check_item/${itemId}`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Requested-With": "XMLHttpRequest"
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.text().then(text => { throw new Error(text) });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            document.getElementById(`deleted-item-row-${itemId}`).remove();
+        } else {
+            alert("⚠️ Error: " + data.message);
+        }
+    })
+    .catch(error => {
+        console.error("❌ Fetch Error:", error);
+        alert("⚠️ Error: " + error.message);
+    });
+}
+
+function openEditModal(itemId) {
+    // Fetch item details using AJAX
+    fetch(`/get_check_item/${itemId}`)
+        .then(response => response.json())
+        .then(data => {
+            // Populate the modal form with item details
+            document.getElementById('edit_item_id').value = data.id;
+            document.getElementById('edit_item_name').value = data.item_name;
+            document.getElementById('edit_mandatory').checked = data.mandatory;
+            document.getElementById('edit_manual_link').value = data.manual_link;
+            document.getElementById('edit_additional_info').value = data.additional_info;
+            // Show the modal
+            var editItemModal = new bootstrap.Modal(document.getElementById('editItemModal'));
+            editItemModal.show();
+        })
+        .catch(error => console.error('Error fetching item details:', error));
+}
+document.getElementById('editItemForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+    var formData = new FormData(this);
+    var itemId = formData.get('item_id');
+
+    fetch(`/update_check_item/${itemId}`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();  // Reload the page to reflect changes
+        } else {
+            alert('Error updating item: ' + data.error);
+        }
+    })
+    .catch(error => console.error('Error updating item:', error));
+});
+</script>
+
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Manage Answers for: {{ question.text }}</h1>
+
+    <form method="POST" action="{{ url_for('manage_answers', question_id=question.id) }}">
+        <div class="row g-3 align-items-center">
+            <div class="col-auto">
+                <label for="text" class="col-form-label">Add New Answer:</label>
+            </div>
+            <div class="col-auto">
+                <input type="text" class="form-control" id="text" name="text" placeholder="Answer Text" required>
+            </div>
+            <div class="col-auto">
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="is_correct" name="is_correct">
+                    <label for="is_correct" class="form-check-label">Correct</label>
+                </div>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary">Add Answer</button>
+            </div>
+        </div>
+    </form>
+    
+    <hr>
+
+<!-- Existing Answers -->
+<h2>Existing Answers</h2>
+<div class="row">
+    {% for answer in answers %}
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <!-- Display Existing Answer Text -->
+                <form method="POST" action="{{ url_for('update_answer', answer_id=answer.id) }}">
+                    <div class="mb-3">
+                        <label for="answer_text_{{ answer.id }}" class="form-label"><strong>Answer:</strong></label>
+                        <input type="text" class="form-control" id="answer_text_{{ answer.id }}" name="answer_text" value="{{ answer.text }}" required>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input type="checkbox" class="form-check-input" id="correct_{{ answer.id }}" name="is_correct" {% if answer.is_correct %}checked{% endif %}>
+                        <label for="correct_{{ answer.id }}" class="form-check-label">Correct</label>
+                    </div>
+                    <!-- Save Button -->
+                    <button type="submit" class="btn btn-success btn-sm w-100 mb-2">Save</button> 
+                </form>
+
+                <!-- Delete Button -->
+                <form id="delete-form-{{ answer.id }}" method="POST" action="{{ url_for('delete_answer', answer_id=answer.id) }}">
+                    <button type="submit" class="btn btn-danger btn-sm w-100" onclick="return confirm('Are you sure you want to delete this answer?')">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

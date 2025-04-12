@@ -1,0 +1,660 @@
+{% extends "base.html" %}
+
+{% block title %}Crew Check Form{% endblock %}
+
+{% block content %}
+{% set read_only = check_meta and check_meta.is_complete %}
+<div class="container mt-5">
+  <h1 class="mb-4">Crew Check Form</h1>
+  <!-- Append draft_id as a query parameter if check_meta exists -->
+  <form method="POST" action="{{ url_for('crew_check_form', crew_check_id=crew_check.id) }}{% if check_meta %}?draft_id={{ check_meta.id }}{% endif %}">
+    <!-- Candidate Information Section -->
+    <div class="row mb-3">
+      {% if 'candidate_name' in visible_fields %}
+      <div class="col-md-3">
+        <label for="candidate_name" class="form-label">Candidate Name *</label>
+        <select class="form-select form-select-sm" id="candidate_name" name="candidate_id" required onchange="populateCandidateDetails()" {% if read_only %}disabled{% endif %}>
+          <option value="">Select Candidate</option>
+          {% for user in all_candidates %}
+            <option value="{{ user.id }}" 
+              {% if check_meta and user.id == check_meta.candidate_id %}
+                  selected
+              {% elif candidate and user.id == candidate.id %}
+                  selected
+              {% endif %}
+            >
+              {{ user.username }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      {% if 'licence_type' in visible_fields %}
+      <div class="col-md-3">
+        <label for="licence_type" class="form-label">Licence Type</label>
+        <input type="text" class="form-control form-control-sm" id="licence_type" name="licence_type" readonly
+          value="{% if check_meta and check_meta.candidate %}{{ check_meta.candidate.license_type }}{% else %}{{ candidate_data.license_type }}{% endif %}">
+      </div>
+      {% endif %}
+      {% if 'licence_number' in visible_fields %}
+      <div class="col-md-3">
+        <label for="licence_number" class="form-label">Licence Number</label>
+        <input type="text" class="form-control form-control-sm" id="licence_number" name="licence_number" readonly
+          value="{% if check_meta and check_meta.candidate %}{{ check_meta.candidate.license_number }}{% else %}{{ candidate_data.license_number }}{% endif %}">
+      </div>
+      {% endif %}
+      {% if 'medical_expiry' in visible_fields %}
+      <div class="col-md-3">
+        <label for="medical_expiry" class="form-label">Medical Expiry</label>
+        <input type="text" class="form-control form-control-sm" id="medical_expiry" name="medical_expiry" readonly
+          value="{% if check_meta and check_meta.candidate and check_meta.candidate.medical_expiry %}{{ check_meta.candidate.medical_expiry.strftime('%Y-%m-%d') }}{% else %}{{ candidate_data.medical_expiry }}{% endif %}">
+      </div>
+      {% endif %}      
+    </div>
+
+    <!-- Other form fields -->
+    {% if 'date_of_test' in visible_fields %}
+    <div class="row mb-3">
+      <div class="col-md-3">
+        <label for="date_of_test" class="form-label">Date Of Test *</label>
+        <input type="date" class="form-control form-control-sm" id="date_of_test" name="date_of_test" required
+          value="{% if check_meta %}{{ check_meta.date_of_test }}{% else %}{{ today }}{% endif %}" {% if read_only %}readonly{% endif %}>
+      </div>
+      {% endif %}    
+      {% if 'aircraft_type' in visible_fields %}
+      <div class="col-md-3">
+        <label for="aircraft_type" class="form-label">Aircraft Type *</label>
+        <select class="form-select form-select-sm" id="aircraft_type" name="aircraft_type" required {% if read_only %}disabled{% endif %}>
+          <option value="ATR 72" {% if check_meta and check_meta.aircraft_type == 'ATR 72' %}selected{% endif %}>ATR 72</option>
+          <option value="SF34" {% if check_meta and check_meta.aircraft_type == 'SF34' %}selected{% endif %}>SF34</option>
+        </select>
+      </div>
+      {% endif %}    
+      {% if 'aircraft_registration' in visible_fields %}
+      <div class="col-md-3">
+        <label for="aircraft_registration" class="form-label">Aircraft Registration *</label>
+        <input type="text" class="form-control form-control-sm" id="aircraft_registration" name="aircraft_registration" required
+          value="{% if check_meta %}{{ check_meta.aircraft_registration }}{% else %}SIM{% endif %}" {% if read_only %}readonly{% endif %}>
+      </div>
+      {% endif %}    
+      {% if 'type_of_check' in visible_fields %}
+      <div class="col-md-3">
+        <label for="type_of_check" class="form-label">Type Of Check *</label>
+        <select class="form-select form-select-sm" id="type_of_check" name="type_of_check" required {% if read_only %}disabled{% endif %}>
+          <option value="OCA/IRC" {% if check_meta and check_meta.type_of_check == 'OCA/IRC' %}selected{% endif %}>OCA/IRC</option>
+          <option value="IRC" {% if check_meta and check_meta.type_of_check == 'IRC' %}selected{% endif %}>IRC</option>
+          <option value="OCA" {% if check_meta and check_meta.type_of_check == 'OCA' %}selected{% endif %}>OCA</option>
+        </select>
+      </div>
+      {% endif %}   
+    </div>
+
+    <hr>
+
+<!-- Assessment Criteria Section -->
+<h5 class="small">Assessment Criteria</h5>
+<table class="table table-bordered table-sm">
+  <thead>
+    <tr>
+      <th class="small">Assessment Criteria</th>
+      <th class="small">IRC (M)</th>
+      <th class="small">Grading</th>
+      <th class="small">Comments</th> <!-- Add a column for comments -->
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in check_items | sort(attribute='order') %}
+      {% if not item.deleted %}
+        <tr>
+          <td class="small">
+            <a href="{{ item.manual_link }}" target="_blank">{{ item.item_name }}</a>
+            {% if item.additional_info %}
+              <div class="text-danger small">{{ item.additional_info }}</div>
+            {% endif %}
+          </td>
+          <td class="text-center small">
+            {% if item.mandatory %}
+              <span class="text-success">M</span>
+            {% else %}
+              <span class="text-muted"></span>
+            {% endif %}
+          </td>
+          <td class="small">
+            <div class="form-check form-check-inline">
+              <input type="radio" class="form-check-input" name="grade_{{ item.id }}" value="1"
+                {% if check_meta and check_meta.get_grade(item.id) == '1' %}checked{% endif %} {% if read_only %}disabled{% endif %}>
+              <label class="form-check-label small">1</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" class="form-check-input" name="grade_{{ item.id }}" value="2"
+                {% if check_meta and check_meta.get_grade(item.id) == '2' %}checked{% endif %} {% if read_only %}disabled{% endif %}>
+              <label class="form-check-label small">2</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" class="form-check-input" name="grade_{{ item.id }}" value="3"
+                {% if check_meta and check_meta.get_grade(item.id) == '3' %}checked{% endif %} {% if read_only %}disabled{% endif %}>
+              <label class="form-check-label small">3</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" class="form-check-input" name="grade_{{ item.id }}" value="4"
+                {% if check_meta and check_meta.get_grade(item.id) == '4' %}checked{% endif %} {% if read_only %}disabled{% endif %}>
+              <label class="form-check-label small">4</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" class="form-check-input" name="grade_{{ item.id }}" value="5"
+                {% if check_meta and check_meta.get_grade(item.id) == '5' %}checked{% endif %} {% if read_only %}disabled{% endif %}>
+              <label class="form-check-label small">5</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input type="radio" class="form-check-input" name="grade_{{ item.id }}" value="NA"
+                {% if check_meta and check_meta.get_grade(item.id) == 'NA' %}checked{% endif %} {% if read_only %}disabled{% endif %}>
+              <label class="form-check-label small">Not Assessed (NA)</label>
+            </div>
+          </td>
+          <td class="small">
+            <button 
+              type="button" 
+              class="btn btn-sm btn-secondary comment-btn" 
+              data-bs-toggle="modal" 
+              data-bs-target="#commentModal_{{ item.id }}"
+              id="commentButton_{{ item.id }}">
+              Comment
+            </button>
+          
+            <!-- Comment Modal -->
+            <div class="modal fade" id="commentModal_{{ item.id }}" tabindex="-1" aria-labelledby="commentModalLabel_{{ item.id }}" aria-hidden="true">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="commentModalLabel_{{ item.id }}">View Comment for {{ item.item_name }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <textarea 
+                      class="form-control comment-box" 
+                      name="comment_{{ item.id }}" 
+                      id="commentBox_{{ item.id }}"
+                      rows="3"
+                      {% if check_meta.is_complete %}readonly{% endif %}>{{ check_meta.get_grade_comment(item.id) if check_meta else '' }}</textarea>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeSignModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="signSubmitBtn" onclick="submitSign()">
+                      Submit
+                      <span id="signSpinner" class="spinner-border spinner-border-sm ms-2" role="status" style="display: none;"></span>
+                    </button>
+                  </div>                  
+                </div>
+              </div>
+            </div>
+          </td>
+          
+        </tr>
+      {% endif %}
+    {% endfor %}
+  </tbody>
+</table>
+
+    <hr>
+
+    <!-- Additional Information Section -->
+    <h5 class="small">Additional Information</h5>
+    {% if 'comments' in visible_fields %}
+    <div class="row mb-2">
+      <div class="col-md-12">
+        <label for="comments" class="form-label small">Comments</label>
+        <textarea class="form-control form-control-sm" id="comments" name="comments" rows="3" {% if read_only %}readonly{% endif %}>{% if check_meta %}{{ check_meta.comments }}{% endif %}</textarea>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Flight Time Details -->
+    {% if 'flight_times' in visible_fields %}
+    <div class="row mb-2">
+      <div class="col-md-4">
+        <label for="flight_time_day" class="form-label small">Flight Time (Day)</label>
+        <input type="number" class="form-control form-control-sm" id="flight_time_day" name="flight_time_day" min="0" value="{% if check_meta %}{{ check_meta.flight_time_day }}{% endif %}" {% if read_only %}readonly{% endif %}>
+      </div>
+      <div class="col-md-4">
+        <label for="flight_time_night" class="form-label small">Flight Time (Night)</label>
+        <input type="number" class="form-control form-control-sm" id="flight_time_night" name="flight_time_night" min="0" value="{% if check_meta %}{{ check_meta.flight_time_night }}{% endif %}" {% if read_only %}readonly{% endif %}>
+      </div>
+      <div class="col-md-4">
+        <label for="flight_time_if" class="form-label small">Flight Time (I/F)</label>
+        <input type="number" class="form-control form-control-sm" id="flight_time_if" name="flight_time_if" min="0" value="{% if check_meta %}{{ check_meta.flight_time_if }}{% endif %}" {% if read_only %}readonly{% endif %}>
+      </div>
+    </div>
+    {% endif %}
+    <hr>
+
+    <!-- Check Due and Exam Info -->
+    <div class="row mb-3">
+      {% if 'current_check_due' in visible_fields %}
+      <div class="col-md-4">
+        <label for="current_check_due" class="form-label small">Current Check Due *</label>
+        <input type="date" class="form-control form-control-sm" id="current_check_due" name="current_check_due" required value="{% if check_meta %}{{ check_meta.current_check_due }}{% else %}{{ today }}{% endif %}" {% if read_only %}readonly{% endif %}>
+      </div>
+      {% endif %}
+      {% if 'test_result' in visible_fields %}
+      <div class="col-md-4">
+        <label for="test_result" class="form-label small">Test Result *</label>
+        <select class="form-select form-select-sm" id="test_result" name="test_result" required {% if read_only %}disabled{% endif %}>
+          <option value="PASS" {% if check_meta and check_meta.test_result == 'PASS' %}selected{% endif %}>PASS</option>
+          <option value="FAIL" {% if check_meta and check_meta.test_result == 'FAIL' %}selected{% endif %}>FAIL</option>
+        </select>
+      </div>
+      {% endif %}
+      {% if 'logbook_sticker_issued' in visible_fields %}
+      <div class="col-md-4">
+        <label for="logbook_sticker_issued" class="form-label small">Logbook Sticker Issued *</label>
+        <select class="form-select form-select-sm" id="logbook_sticker_issued" name="logbook_sticker_issued" required {% if read_only %}disabled{% endif %}>
+          <option value="YES" {% if check_meta and check_meta.logbook_sticker_issued == 'YES' %}selected{% endif %}>YES</option>
+          <option value="NO" {% if check_meta and check_meta.logbook_sticker_issued == 'NO' %}selected{% endif %}>NO</option>
+        </select>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="row mb-2">
+      {% if 'next_check_due' in visible_fields %}
+      <div class="col-md-4">
+        <label for="next_check_due" class="form-label small">Next Check Due *</label>
+        <input type="date" class="form-control form-control-sm" id="next_check_due" name="next_check_due" required value="{% if check_meta %}{{ check_meta.next_check_due }}{% else %}{{ today }}{% endif %}" {% if read_only %}readonly{% endif %}>
+      </div>
+      {% endif %}
+      {% if 'examiner_name' in visible_fields %}
+      <div class="col-md-4">
+        <label for="examiner_name" class="form-label small">Examiner Name *</label>
+        <input type="text" class="form-control form-control-sm" id="examiner_name" name="examiner_name" readonly 
+       value="{% if check_meta and check_meta.examiner_name %}{{ check_meta.examiner_name }}{% else %}{{ current_user.username if not check_meta else '' }}{% endif %}">
+      </div>
+      {% endif %}
+      {% if 'examiner_licence_number' in visible_fields %}
+      <div class="col-md-4">
+        <label for="examiner_licence_number" class="form-label small">Examiner Licence Number *</label>
+        <input type="text" class="form-control form-control-sm" id="examiner_licence_number" name="examiner_licence_number" readonly value="{{ current_user.license_number }}">
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Hidden fields for examiner and candidate signature codes -->
+    <input type="hidden" id="crew_check_id" name="crew_check_id" value="{{ crew_check.id }}">
+
+    {% if not read_only %}
+        <!-- Signature Panels (Only Show When Not Read-Only) -->
+        <div class="row mb-3">
+          <div class="col-md-2">
+            <label class="form-label small">Examiner Password *</label>
+            <!-- Hidden field to track whether examiner has signed -->
+            <input type="hidden" id="examiner_signed" name="examiner_signed" value="{% if check_meta and check_meta.examiner_signed %}true{% else %}false{% endif %}">
+            <!-- Sign button for examiner -->
+            {% if check_meta and check_meta.examiner_signed %}
+              <button type="button" class="btn btn-success btn-sm" id="examiner_sign_btn" disabled>Signed</button>
+            {% else %}
+              <button type="button" class="btn btn-secondary btn-sm" id="examiner_sign_btn" onclick="openSignModal('examiner', '{{ current_user.id }}')">Sign</button>
+            {% endif %}
+            <!-- Tick icon, initially hidden -->
+            <span id="examiner_sign_status" class="text-success" {% if check_meta and check_meta.examiner_code %}style="display:inline;"{% else %}style="display:none;"{% endif %}>&#10004;</span>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small">Candidate Password *</label>
+            <!-- Hidden field to track whether candidate has signed -->
+            <input type="hidden" id="candidate_signed" name="candidate_signed" value="{% if check_meta and check_meta.candidate_signed %}true{% else %}false{% endif %}">
+            <!-- Sign button for candidate -->
+            {% if check_meta and check_meta.candidate_signed %}
+              <button type="button" class="btn btn-success btn-sm" id="candidate_sign_btn" disabled>Signed</button>
+            {% else %}
+              <button type="button" class="btn btn-secondary btn-sm" id="candidate_sign_btn" onclick="openSignModal('candidate', '{{ candidate.id if candidate else '' }}')">Sign</button>
+            {% endif %}
+            <!-- Tick icon, initially hidden -->
+            <span id="candidate_sign_status" class="text-success" {% if check_meta and check_meta.candidate_code %}style="display:inline;"{% else %}style="display:none;"{% endif %}>&#10004;</span>
+          </div>
+        </div>
+    {% endif %}
+  
+    {% if not read_only %}
+    <!-- Save Draft and Submit Buttons -->
+    <div class="row mb-3">
+      <div class="col-md-6">
+        <button type="button" name="save_draft" value="true" class="btn btn-secondary btn-sm" onclick="saveDraft()">Save Draft</button>
+      </div>      
+      <div class="col-md-6 text-end">
+        {% if check_meta and check_meta.examiner_signed and check_meta.candidate_signed %}
+        <button type="button" class="btn btn-primary btn-sm" id="submit_btn" onclick="finalSubmit(event)">Submit</button>
+        {% else %}
+          <button type="submit" class="btn btn-primary btn-sm" id="submit_btn" disabled>Submit</button>
+        {% endif %}
+      </div>
+    </div>
+    {% if check_meta and check_meta.examiner_signed and check_meta.candidate_signed %}
+      <p id="submit_message" class="text-danger" style="display:none; margin-top: 0.5em;"></p>
+    {% else %}
+      <p id="submit_message" class="text-danger" style="display:block; margin-top: 0.5em;">
+        Form cannot be submitted until both Examiner and Candidate sign the form.
+      </p>
+    {% endif %}
+  {% endif %}  
+  </form>
+  {% if read_only %}
+  <div class="row mt-4">
+    <div class="col-md-6">
+      <!-- Button to go back to the checks page -->
+      <a href="{{ url_for('checks') }}" class="btn btn-secondary">Back to Checks</a>
+    </div>
+    <div class="col-md-6 text-end">
+      <!-- Button to print the check -->
+      <a href="{{ url_for('print_check', check_meta_id=check_meta.id) }}" target="_blank" class="btn btn-primary">Print Check</a>
+    </div>
+    {% endif %}
+  </div>
+  <!-- Password Modal -->
+<div class="modal" id="signModal" style="display:none;">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Enter Password</h5>
+          <button type="button" class="btn-close" onclick="closeSignModal()"></button>
+        </div>
+        <div class="modal-body">
+          <input type="password" id="modal_password" class="form-control" placeholder="Enter your password">
+          <div id="modal_error" class="text-danger mt-2" style="display:none;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeSignModal()">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="submitSign()">Submit</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+
+</div>
+
+<!-- CSS for Inline Popover and Visual Feedback -->
+<style>
+  .signature-panel {
+    position: relative;
+    margin-top: 0.5em;
+  }
+  .inline-popover {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 220px;
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    z-index: 10;
+    animation: fadeIn 0.3s ease-in-out;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .signed {
+    color: green;
+    font-size: 1.5em;
+  }
+</style>
+
+<!-- JavaScript for Handling Popovers, Saving, and Authentication -->
+<script>
+    let currentSignRole = ""; // either "examiner" or "candidate"
+    let currentUserId = "";   // user ID for the signing action
+    let candidateCrewCode = "";
+    let candidateId = ""; // Global variable to store the candidate's ID
+
+    // On page load, if a draft is loaded and it has a candidate, initialize candidateCrewCode
+    document.addEventListener("DOMContentLoaded", function() {
+      {% if check_meta and check_meta.candidate %}
+        candidateCrewCode = "{{ check_meta.candidate.crew_code }}";
+        // Also set the candidate sign button's data attribute
+        let candidateBtn = document.getElementById('candidate_sign_btn');
+        if(candidateBtn) {
+          candidateBtn.setAttribute('data-candidate-crew-code', candidateCrewCode);
+        }
+        // Also set the global candidateId from the select element's value
+        candidateId = document.getElementById('candidate_name').value;
+        console.log("Initialized candidateCrewCode:", candidateCrewCode);
+      {% endif %}
+
+            // Listen for comment changes and update button color
+            document.querySelectorAll(".save-comment").forEach(function (saveButton) {
+      saveButton.addEventListener("click", function () {
+        let itemId = this.getAttribute("data-item-id");
+        let commentBox = document.getElementById(`commentBox_${itemId}`);
+        let commentButton = document.getElementById(`commentButton_${itemId}`);
+
+        // Prevent empty comments from being saved
+        if (commentBox.value.trim().length > 0) {
+          commentButton.classList.add("btn-comment-added"); // Change color to green
+        } else {
+          commentButton.classList.remove("btn-comment-added"); // Revert if empty
+          commentBox.value = ""; // Ensure the value is truly empty before submission
+        }
+      });
+    });
+    
+    });
+
+    function openSignModal(role) {
+    currentSignRole = role;
+
+    if (role === "candidate") {
+        // Ensure a candidate is selected
+        let candidateDropdown = document.getElementById('candidate_name');
+        let selectedCandidateId = candidateDropdown.value;
+        
+        if (!selectedCandidateId) {
+            alert("Please select a candidate before signing.");
+            return;
+        }
+
+        // Get the crew code from the candidate sign button's data attribute
+        let candidateBtn = document.getElementById('candidate_sign_btn');
+        candidateCrewCode = candidateBtn.getAttribute('data-candidate-crew-code');
+
+        if (!candidateCrewCode) {
+            alert("Candidate crew code is missing. Please select a valid candidate.");
+            return;
+        }
+
+        currentUserId = candidateCrewCode; // Use crew code, not ID
+        console.log("✅ Authenticating Candidate with Crew Code:", candidateCrewCode);
+
+    } else if (role === "examiner") {
+        currentUserId = "{{ current_user.crew_code }}"; // Use current user's crew code
+        console.log("✅ Authenticating Examiner:", currentUserId);
+    }
+
+    // Reset modal input fields
+    document.getElementById('modal_password').value = "";
+    document.getElementById('modal_error').style.display = "none";
+    document.getElementById('signModal').style.display = "block";
+}
+
+    function closeSignModal() {
+        document.getElementById('signModal').style.display = "none";
+    }
+  
+    function submitSign() {
+      const password = document.getElementById('modal_password').value;
+      const errorElem = document.getElementById('modal_error');
+      const submitBtn = document.getElementById('signSubmitBtn');
+      const spinner = document.getElementById('signSpinner');
+
+      if (!password) {
+        errorElem.innerText = "Password is required.";
+        errorElem.style.display = "block";
+        return;
+      }
+
+      // Disable the submit button and show spinner
+      submitBtn.disabled = true;
+      spinner.style.display = 'inline-block';
+
+      const form = document.querySelector('form');
+      const formData = new FormData(form);
+      formData.append('save_draft', 'true');
+
+      let draftId;
+
+      fetch(form.action, {
+        method: form.method,
+        body: formData,
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (!data.success) throw new Error(data.error || "Error saving form.");
+        draftId = data.draft_id;
+
+        const signFormData = new FormData();
+        signFormData.append("user_id", currentUserId);
+        signFormData.append("password", password);
+        signFormData.append("role", currentSignRole);
+        signFormData.append("crew_check_id", document.getElementById('crew_check_id').value);
+        signFormData.append("draft_id", draftId);
+
+        return fetch("{{ url_for('verify_sign_password') }}", {
+          method: "POST",
+          body: signFormData,
+        });
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (!data.success) {
+          throw new Error(data.error || "Invalid password.");
+        }
+
+        // Update UI
+        if (currentSignRole === "examiner") {
+          document.getElementById('examiner_signed').value = "true";
+          document.getElementById('examiner_sign_btn').style.display = "none";
+          document.getElementById('examiner_sign_status').style.display = "inline";
+        } else if (currentSignRole === "candidate") {
+          document.getElementById('candidate_signed').value = "true";
+          document.getElementById('candidate_sign_btn').style.display = "none";
+          document.getElementById('candidate_sign_status').style.display = "inline";
+        }
+
+        closeSignModal();
+        window.location.href = `/crew_check_form/${document.getElementById('crew_check_id').value}?draft_id=${draftId}`;
+      })
+      .catch(error => {
+        console.error("❌ Sign Error:", error);
+        errorElem.innerText = error.message || "Unexpected error occurred.";
+        errorElem.style.display = "block";
+        // Re-enable the button and hide spinner
+        submitBtn.disabled = false;
+        spinner.style.display = 'none';
+      });
+    }
+
+    function populateCandidateDetails() {
+    let selectedCandidateId = document.getElementById('candidate_name').value;
+    candidateId = selectedCandidateId;
+
+    if (selectedCandidateId) {
+        fetch(`/get_candidate_details/${selectedCandidateId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    console.error("❌ Error fetching candidate details:", data.error);
+                    return;
+                }
+
+                document.getElementById('licence_type').value = data.license_type || "";
+                document.getElementById('licence_number').value = data.license_number || "";
+                document.getElementById('medical_expiry').value = data.medical_expiry || "";
+                
+                candidateCrewCode = data.crew_code || "";
+                document.getElementById('candidate_sign_btn').setAttribute('data-candidate-crew-code', candidateCrewCode);
+
+                console.log("✅ Candidate Crew Code Set:", candidateCrewCode);
+            })
+            .catch(error => console.error("❌ Error in fetch request:", error));
+    } else {
+        console.warn("⚠ No candidate selected.");
+    }
+}
+
+function finalSubmit(event) {
+  event.preventDefault(); // Stop the normal form submission
+
+  // Optional: validate any fields here if needed
+
+  // Gather the form data
+  const form = document.querySelector('form');
+  const formData = new FormData(form);
+  
+  // You might want to log the formData values for debugging
+  // for (let pair of formData.entries()) {
+  //   console.log(pair[0]+ ': ' + pair[1]);
+  // }
+
+  // Submit the form data via AJAX
+  fetch(form.action, {
+    method: form.method,
+    body: formData,
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      // On success, redirect the user to a new page.
+      // For example, redirect to the same page with updated draft_id query parameter:
+      const crewCheckId = document.getElementById('crew_check_id').value;
+      window.location.href = `/crew_check_form/${crewCheckId}?draft_id=${data.draft_id}`;
+      // Alternatively, redirect to a completely different page:
+      // window.location.href = '/final_submission_success_page';
+    } else {
+      // Display the error message (you can customize how you want to show errors)
+      alert(data.error || "There was an error submitting the form.");
+    }
+  })
+  .catch(error => {
+    console.error("Error during final submission:", error);
+    alert("Error submitting form.");
+  });
+}
+
+function saveDraft() {
+    // Get the form element
+    const form = document.querySelector('form');
+    const formData = new FormData(form);
+    // Ensure the form is flagged as a draft
+    formData.append('save_draft', 'true');
+
+    fetch(form.action, {
+        method: form.method,
+        body: formData,
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Redirect back to the checks page upon successful draft save.
+            window.location.href = "{{ url_for('checks') }}";
+        } else {
+            alert(data.error || "Error saving draft.");
+        }
+    })
+    .catch(error => {
+        console.error("Error during saveDraft:", error);
+        alert("Error saving draft.");
+    });
+}
+    // Apply button color changes on page load if comments exist
+    document.querySelectorAll(".comment-box").forEach(function (commentBox) {
+      let itemId = commentBox.id.replace("commentBox_", ""); // Extract the ID
+      let commentButton = document.getElementById(`commentButton_${itemId}`);
+
+      if (commentBox.value.trim().length > 0) {
+        commentButton.classList.add("btn-comment-added");
+      }
+    });
+
+
+
+</script>
+{% endblock %}

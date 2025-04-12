@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}User Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+        <h1>Welcome, {{ current_user.username }}</h1>
+    <div class="row mt-4">
+        <!-- Main Content: Courses and User Dashboard -->
+        <div class="col-lg-8">
+
+
+            {% if upcoming_courses %}
+                <h2>New Courses</h2>
+                <ul class="list-group mb-3">
+                    {% for course in upcoming_courses %}
+                    <li class="list-group-item">
+                        <strong>{{ course.title }}</strong>
+                        <p>{{ course.description }}</p>
+                        <a href="{{ url_for('view_course', course_id=course.id) }}" class="btn btn-primary btn-sm">Start Course</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>No new courses available.</p>
+            {% endif %}
+            
+            {% if optional_courses %}
+                <h2 class="text-success">Optional Courses</h2>
+                <div class="alert alert-success p-3">
+                    <ul class="list-group">
+                        {% for course in optional_courses %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center success-highlight">
+                            <div>
+                                <strong>{{ course.title }}</strong>
+                                <p class="mb-1">{{ course.description }}</p>
+                            </div>
+                            <a href="{{ url_for('view_course', course_id=course.id) }}" class="btn btn-info btn-sm">View Course</a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+            
+            {% if renewable_soon_courses %}
+            <h2 class="text-info">Courses Expiring Soon (Within 30 Days)</h2>
+            <div class="alert alert-info p-3">
+                <ul class="list-group">
+                    {% for course in renewable_soon_courses %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ course['course'].title }}</strong>
+                            <p class="mb-1">Expires on: <span class="fw-bold">{{ course['expiry_date'].strftime('%A %d-%b-%Y') }}</span></p>
+                        </div>
+                        <a href="{{ url_for('view_course', course_id=course['course'].id) }}" class="btn btn-outline-primary btn-sm">Renew Now</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+        
+
+            {% if expired_courses %}
+                <h2 class="text-danger">Expired Courses</h2>
+                <div class="alert alert-danger p-3">
+                    <ul class="list-group">
+                        {% for expired_course in expired_courses %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ expired_course['course'].title }}</strong>
+                                <p class="mb-1">Expired on: <span class="fw-bold">{{ expired_course['expiry_date'].strftime('%A %d-%b-%Y') }}</span></p>
+                            </div>
+                            <a href="{{ url_for('view_course', course_id=expired_course['course'].id) }}" class="btn btn-warning btn-sm">Review Course</a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% else %}
+                <p>No expired courses.</p>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar: Completed Courses and Qualifications -->
+        <div class="col-lg-4">
+            {% if all_completed_courses %}
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h4>Completed Courses</h4>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group">
+                            {% for course_data in all_completed_courses %}
+                            <li class="list-group-item">
+                                <strong>{{ course_data.course.title }}</strong>
+                                <br>
+                                <small>
+                                    Expiry Date: 
+                                    {% if course_data.expiry_date %}
+                                        {{ course_data.expiry_date.strftime('%A %d-%b-%Y') }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </small>
+                                <br>
+                                {% if course_data.certificate_path %}
+                                    <a href="{{ url_for('view_certificate', attempt_id=course_data.attempt_id) }}" class="btn btn-success btn-sm mt-2">View Certificate</a>
+                                {% endif %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            {% else %}
+                <p>No completed courses available.</p>
+            {% endif %}
+
+            <!-- Display qualifications -->
+            {% if qualifications %}
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h4>Qualifications</h4>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group">
+                            {% for qualification in qualifications %}
+                            <li class="list-group-item">
+                                <strong>{{ qualification.qualification }}</strong>
+                                <br>
+                                <small>
+                                    Valid From: {{ qualification.valid_from.strftime('%A %d-%b-%Y') }}
+                                </small>
+                                <br>
+                                <small>
+                                    Valid To: 
+                                    {% if qualification.valid_to %}
+                                        {{ qualification.valid_to.strftime('%A %d-%b-%Y') }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </small>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            {% else %}
+                <p>No qualifications available.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

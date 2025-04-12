@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1>Reports Dashboard</h1>
+    <div class="list-group">
+        <a href="{{ url_for('envision_qualification_expiry_report') }}" class="list-group-item list-group-item-action">
+            Qualification Expiry Report
+        </a>
+        <a href="{{ url_for('user_qualifications_report') }}" class="list-group-item list-group-item-action">
+            User Qualifications Report
+        </a>
+        <a href="{{ url_for('qualifications_report') }}" class="list-group-item list-group-item-action">
+            Qualifications Report
+        </a>
+        <a href="{{ url_for('Crew_Checks_Report') }}" class="list-group-item list-group-item-action">
+             Checks Graph
+        </a>
+        <a href="{{ url_for('user_reports_dashboard', user_id=current_user.id) }}" class="list-group-item list-group-item-action">
+            User Reports Dashboard
+        </a>
+        <!-- Add more report links here as needed -->
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,703 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>Roster Dashboard</h1>
+
+  <!-- Show Logged-in User -->
+  <p>
+    <strong>User:</strong> {{ user.username }} (Crew Code: {{ user.crew_code }})
+    {% if user.is_admin %}
+      <span style="color: red;">[Admin]</span>
+    {% endif %}
+  </p>
+
+  {% if user.is_admin %}
+    <!-- Admin Dropdown: Allows admin to select any employee's roster -->
+    <label for="employeeSelect"><strong>Select Employee:</strong></label>
+    <select id="employeeSelect">
+      <option value="">(Leave blank for your roster)</option>
+    </select>
+    <br><br>
+  {% endif %}
+
+  <h2>Flight Data Viewer</h2>
+  <!-- Form using date inputs so only the date is shown -->
+  <form id="searchForm">
+    <label>
+      Date From:
+      <input type="date" name="dateFrom" required>
+    </label>
+    <label>
+      Date To:
+      <input type="date" name="dateTo" required>
+    </label>
+    <button type="submit">Fetch Flights</button>
+  </form>
+
+  <!-- Export to ICS button -->
+  <button type="button" id="exportICS">Export to Calendar</button>
+
+  <div id="loadingIndicator" style="display: none; text-align: center; margin: 1rem;">
+    <!-- You can use an animated GIF, SVG, or CSS spinner -->
+    <img src="/static/images/spinner.gif" alt="Loading..." style="width: 100px; height: 100px;">
+    <p>Loading roster ...</p>
+  </div>
+  
+  <!-- Calendar view will be rendered here -->
+  <div id="results"></div>
+
+  {% if user.is_admin %}
+    <!-- Optional: Unacknowledged Roster Changes section for Admins -->
+    <h2>Unacknowledged Roster Changes</h2>
+    <div id="rosterChanges">
+      <!-- This section should be populated by an API call returning unacknowledged changes.
+           For now, it's just a placeholder. -->
+      <p>No unacknowledged changes found.</p>
+    </div>
+  {% endif %}
+
+  <!-- Modal for Flight Details -->
+  <div id="flightModal" class="modal">
+    <div class="modal-content">
+      <span id="closeModal" class="close">&times;</span>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+
+  <!-- CSS for Calendar, Modal, and Admin Dropdown -->
+  <style>
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+    }
+    .calendar-cell {
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      border-radius: 4px;
+      background: #f9f9f9;
+      min-height: 150px;
+    }
+    .day-header {
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+      text-align: center;
+      background: #eee;
+      padding: 0.25rem;
+      border-radius: 4px;
+    }
+    .checkin-bar, .checkout-bar {
+      background: #f2dede;
+      padding: 0.25rem 0.5rem;
+      margin: 0.25rem 0;
+      border-radius: 4px;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #a94442;
+    }
+    .calendar-event {
+      background: #d9edf7;
+      padding: 0.25rem 0.5rem;
+      margin: 0.25rem 0;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .first-flight {
+      border: 2px solid #31708f;
+      font-weight: bold;
+    }
+    .no-flight {
+      text-align: center;
+      color: #888;
+      font-style: italic;
+      padding: 0.5rem;
+    }
+    /* Modal styling */
+    .modal {
+      display: none; /* Hidden by default */
+      position: fixed;
+      z-index: 100;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.5);
+    }
+    .modal-content {
+      background-color: #fff;
+      margin: 10% auto;
+      padding: 1rem;
+      border: 1px solid #888;
+      width: 80%;
+      max-width: 600px;
+      border-radius: 4px;
+    }
+    .close {
+      color: #aaa;
+      float: right;
+      font-size: 1.5rem;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .close:hover,
+    .close:focus {
+      color: #000;
+      text-decoration: none;
+    }
+    .spinner {
+    margin: 1rem auto;
+    width: 100px;
+    height: 100px;
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-left-color: #000;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  </style>
+
+  <!-- JavaScript Section -->
+  <script>
+    // --------------------------
+    // GLOBAL VARIABLES & CONFIG
+    // --------------------------
+    const authToken = {{ session.get('auth_token')|tojson }};
+    const crewCode = {{ user.crew_code|tojson }};
+    let employeeMapping = {}; // Cache for employee details
+
+    console.log("🔹 Using LMS Authentication Token:", authToken);
+    console.log("🔹 Matching LMS Crew Code to Envision Employee UserName:", crewCode);
+
+    const EMPLOYEES_CACHE_KEY = "employeesCache";
+    const EMPLOYEES_CACHE_EXPIRY = 3600000; // 1 hour
+
+    // --------------------------
+    // API FUNCTIONS
+    // --------------------------
+    async function fetchEmployeesCached() {
+      const cached = localStorage.getItem(EMPLOYEES_CACHE_KEY);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.timestamp && (Date.now() - parsed.timestamp < EMPLOYEES_CACHE_EXPIRY)) {
+            console.log("✅ Using cached employees data");
+            return parsed.employees;
+          }
+        } catch(e) {
+          console.error("Error parsing cached employee data:", e);
+        }
+      }
+      const employeesUrl = 'https://envision.airchathams.co.nz:8790/v1/Employees';
+      const response = await fetch(employeesUrl, {
+        headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' }
+      });
+      if (!response.ok) {
+        throw new Error("Error fetching employees: " + response.status);
+      }
+      const employees = await response.json();
+      localStorage.setItem(EMPLOYEES_CACHE_KEY, JSON.stringify({ employees, timestamp: Date.now() }));
+      return employees;
+    }
+
+    async function getEnvisionEmployeeUserName() {
+      try {
+        const employees = await fetchEmployeesCached();
+        console.log("✅ Employees Loaded:", employees);
+        const matchedEmployee = employees.find(emp => emp.employeeNo === crewCode);
+        if (!matchedEmployee) {
+          console.error("❌ No matching employee found for crew_code:", crewCode);
+          alert("No matching employee found for your crew code.");
+          return null;
+        }
+        console.log("✅ Matched Envision Employee:", matchedEmployee);
+        return matchedEmployee.id;
+      } catch (error) {
+        console.error("❌ Error fetching employees:", error);
+        return null;
+      }
+    }
+
+    async function fetchEmployeeDetails(employeeId) {
+      const url = `https://envision.airchathams.co.nz:8790/v1/Employees/${employeeId}`;
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Error fetching employee details: ${response.status}`);
+      }
+      return await response.json();
+    }
+
+    async function fetchPlaceDetails(placeId) {
+      const url = `https://envision.airchathams.co.nz:8790/v1/Places/${placeId}`;
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Error fetching place details for ID ${placeId}: ${response.status}`);
+      }
+      return await response.json();
+    }
+
+    async function fetchCrewForFlight(flightId) {
+      const url = `https://envision.airchathams.co.nz:8790/v1/Flights/${flightId}/Crew`;
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Error fetching crew for flight ${flightId}: ${response.status}`);
+      }
+      return await response.json();
+    }
+
+    // --------------------------
+    // HELPER FUNCTION: Format Date for ICS
+    // --------------------------
+    function formatDateICSLocal(date) {
+      const dtf = new Intl.DateTimeFormat('en-GB', { 
+         timeZone: 'Pacific/Auckland',
+         year: 'numeric', month: '2-digit', day: '2-digit',
+         hour: '2-digit', minute: '2-digit', second: '2-digit',
+         hour12: false
+      });
+      const parts = dtf.formatToParts(date);
+      const year = parts.find(p => p.type === 'year').value;
+      const month = parts.find(p => p.type === 'month').value;
+      const day = parts.find(p => p.type === 'day').value;
+      const hour = parts.find(p => p.type === 'hour').value;
+      const minute = parts.find(p => p.type === 'minute').value;
+      const second = parts.find(p => p.type === 'second').value;
+      return `${year}${month}${day}T${hour}${minute}${second}`;
+    }
+
+    // --------------------------
+    // Helper: Build Date Range Array (inclusive)
+    // --------------------------
+    function getDateRange(startStr, endStr) {
+      const dates = [];
+      const start = new Date(startStr + "T00:00:00");
+      const end = new Date(endStr + "T00:00:00");
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        dates.push(new Date(d));
+      }
+      return dates;
+    }
+
+    // --------------------------
+    // SET DEFAULT DATES
+    // --------------------------
+    document.addEventListener("DOMContentLoaded", function() {
+      const now = new Date();
+      const toDateInput = date => date.toISOString().slice(0,10);
+      document.querySelector('input[name="dateFrom"]').value = toDateInput(now);
+      const dateTo = new Date();
+      dateTo.setDate(dateTo.getDate() + 7);
+      document.querySelector('input[name="dateTo"]').value = toDateInput(dateTo);
+    });
+
+    // --------------------------
+    // Populate Employee Dropdown for Admins
+    // --------------------------
+    async function populateEmployeeDropdown() {
+      try {
+        const employees = await fetchEmployeesCached();
+        const select = document.getElementById('employeeSelect');
+        select.innerHTML = "";
+        const defaultOption = document.createElement('option');
+        defaultOption.value = "";
+        defaultOption.text = "(Leave blank for your roster)";
+        select.appendChild(defaultOption);
+        employees.forEach(emp => {
+          const option = document.createElement('option');
+          option.value = emp.id;
+          option.text = `${emp.firstName} ${emp.surname} (Crew Code: ${emp.employeeNo})`;
+          select.appendChild(option);
+        });
+      } catch (error) {
+        console.error("Error populating employee dropdown:", error);
+      }
+    }
+
+    // If user is admin, populate the dropdown when DOM is loaded.
+    document.addEventListener("DOMContentLoaded", function() {
+      {% if user.is_admin %}
+        populateEmployeeDropdown();
+      {% endif %}
+    });
+
+    // --------------------------
+    // FETCH FLIGHT DATA ON FORM SUBMISSION
+    // --------------------------
+    document.getElementById('searchForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+        // Show loading indicator at the start
+      document.getElementById('loadingIndicator').style.display = 'block';
+      if (!authToken) {
+        alert('Please log in first.');
+        return;
+      }
+      
+      const formData = new FormData(document.getElementById('searchForm'));
+      const dateFromInput = formData.get('dateFrom');
+      const dateToInput = formData.get('dateTo');
+      const dateFromIso = new Date(dateFromInput + "T00:00:00").toISOString();
+      const dateToIso = new Date(dateToInput + "T23:59:59").toISOString();
+
+      let employeeId;
+      const employeeSelect = document.getElementById('employeeSelect');
+      if (employeeSelect && employeeSelect.value) {
+        employeeId = employeeSelect.value;
+      } else {
+        employeeId = await getEnvisionEmployeeUserName();
+      }
+      if (!employeeId) return;
+
+      const params = new URLSearchParams({
+        employeeId: employeeId,
+        dateFrom: dateFromIso,
+        dateTo: dateToIso,
+        offset: 0,
+        limit: 100
+      });
+
+      const flightsUrl = `https://envision.airchathams.co.nz:8790/v1/Flights?${params.toString()}`;
+      console.log("🔹 Fetching Flights with URL:", flightsUrl);
+
+      try {
+        const response = await fetch(flightsUrl, {
+          headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' }
+        });
+        if (!response.ok) {
+          console.error("❌ Error fetching flights:", response.status, await response.text());
+          alert("Error fetching flights: " + response.status);
+          document.getElementById('loadingIndicator').style.display = 'none';
+          return;
+        }
+        let flights = await response.json();
+        console.log("✅ Flights Loaded:", flights);
+        window.flightsData = flights;
+
+        flights = await Promise.all(flights.map(async flight => {
+          try {
+            const crew = await fetchCrewForFlight(flight.id);
+            flight.crew = crew;
+          } catch (error) {
+            console.error(`Error fetching crew for flight ${flight.id}:`, error);
+            flight.crew = [];
+          }
+          return flight;
+        }));
+
+        await Promise.all(flights.map(async flight => {
+          if (flight.crew && flight.crew.length) {
+            await Promise.all(flight.crew.map(async member => {
+              if (!employeeMapping[member.employeeId]) {
+                try {
+                  const emp = await fetchEmployeeDetails(member.employeeId);
+                  employeeMapping[member.employeeId] = emp;
+                } catch (error) {
+                  console.error("Error fetching details for crew member", member.employeeId, error);
+                }
+              }
+            }));
+          }
+        }));
+
+        const dateRange = getDateRange(dateFromInput, dateToInput);
+        displayCalendar(flights, dateRange);
+      } catch (error) {
+        console.error("❌ Error fetching flight data:", error);
+      }finally {
+    // Hide loading indicator once the process is complete
+    document.getElementById('loadingIndicator').style.display = 'none';
+    }
+    });
+
+    // --------------------------
+    // DISPLAY CALENDAR VIEW (with blank days, check-in/out bars, departure/destination, and clickable events)
+    // --------------------------
+    function displayCalendar(flights, dateRange) {
+      const flightsByDay = {};
+      flights.forEach(flight => {
+        if (!flight.departureScheduled) return;
+        const flightDate = new Date(flight.departureScheduled + "Z")
+          .toLocaleDateString("en-NZ", { timeZone: "Pacific/Auckland" });
+        if (!flightsByDay[flightDate]) {
+          flightsByDay[flightDate] = [];
+        }
+        flightsByDay[flightDate].push(flight);
+      });
+
+      for (const key in flightsByDay) {
+        flightsByDay[key].sort((a, b) =>
+          new Date(a.departureScheduled + "Z") - new Date(b.departureScheduled + "Z")
+        );
+      }
+
+      let calendarHTML = `<div class="calendar-grid">`;
+      dateRange.forEach(date => {
+        const dayStr = date.toLocaleDateString("en-NZ", { timeZone: "Pacific/Auckland" });
+        calendarHTML += `<div class="calendar-cell">
+          <div class="day-header">${dayStr}</div>`;
+        if (flightsByDay[dayStr] && flightsByDay[dayStr].length > 0) {
+          const flightsForDay = flightsByDay[dayStr];
+          const firstFlight = flightsForDay[0];
+          const lastFlight = flightsForDay[flightsForDay.length - 1];
+          let signOn = "";
+          let signOff = "";
+          if (firstFlight && firstFlight.crew && firstFlight.crew.length) {
+            const baseDep = new Date(firstFlight.departureScheduled + "Z");
+            const ci = firstFlight.crew[0].checkInMinutes || 0;
+            signOn = new Date(baseDep.getTime() - (ci * 60000)).toLocaleTimeString("en-NZ", {
+              timeZone: "Pacific/Auckland", hour: '2-digit', minute: '2-digit', hour12: false
+            });
+          }
+          if (lastFlight && lastFlight.crew && lastFlight.crew.length) {
+            const baseArr = new Date(lastFlight.arrivalScheduled + "Z");
+            const co = lastFlight.crew[0].checkOutMinutes || 0;
+            signOff = new Date(baseArr.getTime() + (co * 60000)).toLocaleTimeString("en-NZ", {
+              timeZone: "Pacific/Auckland", hour: '2-digit', minute: '2-digit', hour12: false
+            });
+          }
+          calendarHTML += `<div class="checkin-bar">Sign On: ${signOn}</div>`;
+          flightsForDay.forEach((flight, index) => {
+            const depTime = new Date(flight.departureScheduled + "Z")
+              .toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: '2-digit', minute: '2-digit', hour12: false });
+            const arrTime = new Date(flight.arrivalScheduled + "Z")
+              .toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: '2-digit', minute: '2-digit', hour12: false });
+            const eventText = `${flight.flightNumberDescription || 'N/A'}<br>
+              ${depTime} - ${arrTime}<br>
+              From: ${flight.departurePlaceDescription || 'N/A'}<br>
+              To: ${flight.arrivalPlaceDescription || 'N/A'}`;
+            const tooltip = `Flight: ${flight.flightNumberDescription || 'N/A'}
+              Dep: ${depTime} - Arr: ${arrTime}
+              Crew: ${flight.crew && flight.crew.length ? flight.crew.map(member => {
+                const emp = employeeMapping[member.employeeId];
+                return emp ? `${emp.firstName} ${emp.surname}` : `Employee ${member.employeeId}`;
+              }).join(", ") : "N/A"}
+              Aircraft: ${flight.flightModelDescription || 'N/A'}
+              Registration: ${flight.flightRegistrationDescription || 'N/A'}
+              From: ${flight.departurePlaceDescription || 'N/A'}
+              To: ${flight.arrivalPlaceDescription || 'N/A'}`;
+            const className = index === 0 ? "calendar-event first-flight" : "calendar-event";
+            calendarHTML += `<div class="${className}" data-flight-id="${flight.id}" title="${tooltip.replace(/\n/g, '&#10;')}" onclick="showFlightDetails(this)">
+                ${eventText}
+              </div>`;
+          });
+          calendarHTML += `<div class="checkout-bar">Sign Off: ${signOff}</div>`;
+        } else {
+          calendarHTML += `<div class="calendar-event no-flight">No Flights. Check PDF Roster for Additional Info on Training or Days Off</div>`;
+        }
+        calendarHTML += `</div>`;
+      });
+      calendarHTML += `</div>`;
+      document.getElementById('results').innerHTML = calendarHTML;
+    }
+
+    // --------------------------
+    // SHOW FLIGHT DETAILS IN MODAL
+    // --------------------------
+    function showFlightDetails(element) {
+      const flightId = element.getAttribute("data-flight-id");
+      const flight = window.flightsData.find(f => f.id == flightId);
+      if (!flight) return;
+      let detailsHTML = `<h3>Flight Details</h3>`;
+      detailsHTML += `<p><strong>Flight Number:</strong> ${flight.flightNumberDescription || 'N/A'}</p>`;
+      const depTime = new Date(flight.departureScheduled + "Z")
+              .toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: '2-digit', minute: '2-digit', hour12: false });
+      const arrTime = new Date(flight.arrivalScheduled + "Z")
+              .toLocaleTimeString("en-NZ", { timeZone: "Pacific/Auckland", hour: '2-digit', minute: '2-digit', hour12: false });
+      detailsHTML += `<p><strong>Departure Time:</strong> ${depTime}</p>`;
+      detailsHTML += `<p><strong>Arrival Time:</strong> ${arrTime}</p>`;
+      detailsHTML += `<p><strong>Status:</strong> ${flight.flightStatusDescription || 'N/A'}</p>`;
+      detailsHTML += `<p><strong>Aircraft:</strong> ${flight.flightModelDescription || 'N/A'}</p>`;
+      detailsHTML += `<p><strong>Registration:</strong> ${flight.flightRegistrationDescription || 'N/A'}</p>`;
+      detailsHTML += `<p><strong>From:</strong> ${flight.departurePlaceDescription || 'N/A'}</p>`;
+      detailsHTML += `<p><strong>To:</strong> ${flight.arrivalPlaceDescription || 'N/A'}</p>`;
+      if (flight.crew && flight.crew.length) {
+        const crewNames = flight.crew.map(member => {
+          const emp = employeeMapping[member.employeeId];
+          return emp ? `${emp.firstName} ${emp.surname}` : `Employee ${member.employeeId}`;
+        }).join(", ");
+        detailsHTML += `<p><strong>Crew:</strong> ${crewNames}</p>`;
+      } else {
+        detailsHTML += `<p><strong>Crew:</strong> N/A</p>`;
+      }
+      document.getElementById('modalBody').innerHTML = detailsHTML;
+      document.getElementById('flightModal').style.display = "block";
+    }
+
+    // --------------------------
+    // CLOSE MODAL WHEN CLICKING <span> (x) OR OUTSIDE THE MODAL
+    // --------------------------
+    document.addEventListener("DOMContentLoaded", function() {
+      const modal = document.getElementById('flightModal');
+      const closeModal = document.getElementById('closeModal');
+      closeModal.onclick = function() {
+        modal.style.display = "none";
+      }
+      window.onclick = function(event) {
+        if (event.target == modal) {
+          modal.style.display = "none";
+        }
+      }
+    });
+
+    // --------------------------
+    // ICS EXPORT FUNCTION (unchanged)
+    // --------------------------
+    function exportICS() {
+      if (!window.flightsData || window.flightsData.length === 0) {
+        alert("No flight data available for export. Please fetch flight data first.");
+        return;
+      }
+      
+      let icsContent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Your Company//Flight Calendar//EN\r\n";
+      
+      icsContent += "BEGIN:VTIMEZONE\r\n";
+      icsContent += "TZID:Pacific/Auckland\r\n";
+      icsContent += "X-LIC-LOCATION:Pacific/Auckland\r\n";
+      icsContent += "BEGIN:STANDARD\r\n";
+      icsContent += "TZOFFSETFROM:+1300\r\n";
+      icsContent += "TZOFFSETTO:+1200\r\n";
+      icsContent += "TZNAME:NZST\r\n";
+      icsContent += "DTSTART:19700405T030000\r\n";
+      icsContent += "END:STANDARD\r\n";
+      icsContent += "BEGIN:DAYLIGHT\r\n";
+      icsContent += "TZOFFSETFROM:+1200\r\n";
+      icsContent += "TZOFFSETTO:+1300\r\n";
+      icsContent += "TZNAME:NZDT\r\n";
+      icsContent += "DTSTART:19701026T020000\r\n";
+      icsContent += "END:DAYLIGHT\r\n";
+      icsContent += "END:VTIMEZONE\r\n";
+      
+      const flightsByDay = {};
+      window.flightsData.forEach(flight => {
+        if (flight.departureScheduled) {
+          const day = new Date(flight.departureScheduled + "Z").toLocaleDateString("en-NZ", {
+            year: "numeric", month: "2-digit", day: "2-digit",
+            timeZone: "Pacific/Auckland"
+          });
+          if (!flightsByDay[day]) {
+            flightsByDay[day] = [];
+          }
+          flightsByDay[day].push(flight);
+        }
+      });
+      
+      for (const day in flightsByDay) {
+        let sortedFlights = flightsByDay[day].sort((a, b) => new Date(a.departureScheduled + "Z") - new Date(b.departureScheduled + "Z"));
+        let signonTime = null, signoffTime = null;
+        const firstFlight = sortedFlights[0];
+        const lastFlight = sortedFlights[sortedFlights.length - 1];
+        if (firstFlight && firstFlight.departureScheduled && firstFlight.crew && firstFlight.crew.length) {
+          const baseDep = new Date(firstFlight.departureScheduled + "Z");
+          const ci = firstFlight.crew[0].checkInMinutes || 0;
+          signonTime = new Date(baseDep.getTime() - (ci * 60000));
+        }
+        if (lastFlight && lastFlight.arrivalScheduled && lastFlight.crew && lastFlight.crew.length) {
+          const baseArr = new Date(lastFlight.arrivalScheduled + "Z");
+          const co = lastFlight.crew[0].checkOutMinutes || 0;
+          signoffTime = new Date(baseArr.getTime() + (co * 60000));
+        }
+        
+        if (signonTime) {
+          const uid = "signon-" + day + "@yourdomain.com";
+          const dtstamp = formatDateICSLocal(new Date());
+          const dtstart = formatDateICSLocal(signonTime);
+          const dtend = formatDateICSLocal(new Date(signonTime.getTime() + 30 * 60000));
+          const summary = "Sign On - " + day;
+          const description = "Crew sign on for flights on " + day;
+          icsContent += "BEGIN:VEVENT\r\n";
+          icsContent += "UID:" + uid + "\r\n";
+          icsContent += "DTSTAMP:" + dtstamp + "\r\n";
+          icsContent += "DTSTART;TZID=Pacific/Auckland:" + dtstart + "\r\n";
+          icsContent += "DTEND;TZID=Pacific/Auckland:" + dtend + "\r\n";
+          icsContent += "SUMMARY:" + summary + "\r\n";
+          icsContent += "DESCRIPTION:" + description + "\r\n";
+          icsContent += "END:VEVENT\r\n";
+        }
+        
+        if (signoffTime) {
+          const uid = "signoff-" + day + "@yourdomain.com";
+          const dtstamp = formatDateICSLocal(new Date());
+          const dtstart = formatDateICSLocal(signoffTime);
+          const dtend = formatDateICSLocal(new Date(signoffTime.getTime() + 30 * 60000));
+          const summary = "Sign Off - " + day;
+          const description = "Crew sign off for flights on " + day;
+          icsContent += "BEGIN:VEVENT\r\n";
+          icsContent += "UID:" + uid + "\r\n";
+          icsContent += "DTSTAMP:" + dtstamp + "\r\n";
+          icsContent += "DTSTART;TZID=Pacific/Auckland:" + dtstart + "\r\n";
+          icsContent += "DTEND;TZID=Pacific/Auckland:" + dtend + "\r\n";
+          icsContent += "SUMMARY:" + summary + "\r\n";
+          icsContent += "DESCRIPTION:" + description + "\r\n";
+          icsContent += "END:VEVENT\r\n";
+        }
+      }
+      
+      window.flightsData.forEach(flight => {
+        if (!flight.departureScheduled || !flight.arrivalScheduled) return;
+        const uid = flight.id + "@yourdomain.com";
+        const dtstamp = formatDateICSLocal(new Date());
+        const dtstart = formatDateICSLocal(new Date(flight.departureScheduled + "Z"));
+        const dtend = formatDateICSLocal(new Date(flight.arrivalScheduled + "Z"));
+        const summary = flight.flightNumberDescription || "Flight";
+        const description = `Status: ${flight.flightStatusDescription || ""}\nAircraft: ${flight.flightModelDescription || "N/A"}\nRegistration: ${flight.flightRegistrationDescription || "N/A"}\nCrew: ${flight.crew && flight.crew.length ? flight.crew.map(member => {
+          const emp = employeeMapping[member.employeeId];
+          return emp ? `${emp.firstName} ${emp.surname}` : `Employee ${member.employeeId}`;
+        }).join(", ") : "N/A"}`;
+        const location = `${flight.departurePlaceDescription || "N/A"} to ${flight.arrivalPlaceDescription || "N/A"}`;
+        
+        icsContent += "BEGIN:VEVENT\r\n";
+        icsContent += "UID:" + uid + "\r\n";
+        icsContent += "DTSTAMP:" + dtstamp + "\r\n";
+        icsContent += "DTSTART;TZID=Pacific/Auckland:" + dtstart + "\r\n";
+        icsContent += "DTEND;TZID=Pacific/Auckland:" + dtend + "\r\n";
+        icsContent += "SUMMARY:" + summary + "\r\n";
+        icsContent += "DESCRIPTION:" + description + "\r\n";
+        icsContent += "LOCATION:" + location + "\r\n";
+        icsContent += "END:VEVENT\r\n";
+      });
+      
+      icsContent += "END:VCALENDAR";
+      
+      const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "flights.ics";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // --------------------------
+    // Attach Export Button Event Listener
+    // --------------------------
+    document.addEventListener("DOMContentLoaded", function() {
+      const exportButton = document.getElementById('exportICS');
+      if (exportButton) {
+        exportButton.addEventListener('click', exportICS);
+      } else {
+        console.error("❌ exportICS button not found.");
+      }
+    });
+  </script>
+
+{% endblock %}

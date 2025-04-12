@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}View Line Training Form{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4">Line Training Form for {{ candidate_name }}</h1>
+
+    <h5>Form Name: {{ form.name }}</h5>
+    <p>Created At: {{ form.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Topic</th>
+                <th>Task</th>
+                <th>Notes</th>
+                <th>Completed</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for topic in topics %}
+                <tr>
+                    <td rowspan="{{ topic.tasks | length }}">{{ topic.name }}</td>
+                    {% for task in topic.tasks %}
+                        <td>{{ task.name }}</td>
+                        <td>{{ task.notes }}</td>
+                        <td>{{ 'Yes' if task.is_completed else 'No' }}</td>
+                    </tr>
+                    {% endfor %}
+                {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

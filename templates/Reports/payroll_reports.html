@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4">📊 Payroll Reports</h1>
+
+    <!-- 📋 Filters for Table -->
+    <form method="GET" class="row g-3 mb-4">
+        <div class="col-md-3">
+            <label for="payroll_period_id" class="form-label">Payroll Period:</label>
+            <select name="payroll_period_id" class="form-select" onchange="this.form.submit()">
+                <option value="">-- Select Payroll Period --</option>
+                {% for period in payroll_periods %}
+                <option value="{{ period.id }}" {% if period.id == selected_period_id %}selected{% endif %}>
+                    {{ period.start_date.strftime("%d %B %Y") }} - {{ period.end_date.strftime("%d %B %Y") }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <label for="quarter" class="form-label">Filter by Quarter:</label>
+            <select name="quarter" class="form-select" onchange="this.form.submit()">
+                <option value="">-- Select Quarter --</option>
+                <option value="Q1" {% if selected_quarter == 'Q1' %}selected{% endif %}>Q1 (Jan - Mar)</option>
+                <option value="Q2" {% if selected_quarter == 'Q2' %}selected{% endif %}>Q2 (Apr - Jun)</option>
+                <option value="Q3" {% if selected_quarter == 'Q3' %}selected{% endif %}>Q3 (Jul - Sep)</option>
+                <option value="Q4" {% if selected_quarter == 'Q4' %}selected{% endif %}>Q4 (Oct - Dec)</option>
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <label for="location_id" class="form-label">Filter by Base:</label>
+            <select name="location_id" class="form-select" onchange="this.form.submit()">
+                <option value="">-- Select Base --</option>
+                {% for location in locations %}
+                <option value="{{ location.id }}" {% if location.id == selected_location %}selected{% endif %}>
+                    {{ location.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+
+    <!-- 📋 Employee Hours Per Month Table -->
+    <div class="card p-3 mb-5">
+        <h3 class="mt-4">📋 Employee Hours Worked</h3>
+        <table class="table table-bordered">
+            <thead class="table-dark">
+                <tr>
+                    <th>Employee</th>
+                    <th>Base</th>
+                    {% for (start_date, end_date) in payroll_period_labels %}
+                    <th>{{ start_date.strftime("%d %b %Y") }} - {{ end_date.strftime("%d %b %Y") }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for (employee, base), hours_data in employee_data.items() %}
+                <tr>
+                    <td>{{ employee }}</td>
+                    <td>{{ base }}</td>
+                    {% for (start_date, end_date) in payroll_period_labels %}
+                    <td>{{ hours_data.get((start_date, end_date), 0.0) }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>        
+    </div>
+
+    <!-- 📊 Graph: Monthly Hours Per Base -->
+    <div class="card p-3">
+        <h3 class="mt-4">📊 Hours Per Month Per Base</h3>
+
+        <!-- Year Filter for Graph -->
+        <form method="GET" class="mb-3">
+            <label for="graph_year" class="form-label">Filter by Year:</label>
+            <select name="graph_year" class="form-select" onchange="this.form.submit()">
+                {% for year in range(2020, 2030) %}
+                <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
+                {% endfor %}
+            </select>
+        </form>
+
+        <canvas id="hoursChart"></canvas>
+    </div>
+</div>
+
+<!-- Chart.js Script -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+    try {
+        const graphData = JSON.parse({{ graph_data | tojson }});
+
+        console.log("✅ Parsed Graph Data:", graphData); // Debugging Output
+
+        // Extract unique locations and months
+        const months = Object.keys(graphData).sort();  
+        const locations = new Set();
+
+        months.forEach(month => {
+            Object.keys(graphData[month]).forEach(location => locations.add(location));
+        });
+
+        const locationList = Array.from(locations);
+
+        // Prepare datasets for Chart.js
+        const datasets = locationList.map((location, index) => {
+            return {
+                label: location,
+                data: months.map(month => graphData[month][location] || 0),  
+                borderColor: `hsl(${index * 60}, 70%, 50%)`,
+                backgroundColor: `hsl(${index * 60}, 70%, 70%)`,
+                fill: false
+            };
+        });
+
+        const monthNames = {
+            "01": "January",
+            "02": "February",
+            "03": "March",
+            "04": "April",
+            "05": "May",
+            "06": "June",
+            "07": "July",
+            "08": "August",
+            "09": "September",
+            "10": "October",
+            "11": "November",
+            "12": "December"
+        };
+
+        // ✅ Use actual month names in the labels
+        const formattedMonths = months.map(m => monthNames[m] || `Month ${m}`);
+
+        const chartData = {
+            labels: formattedMonths,  // ✅ Now displays real month names
+            datasets: datasets
+        };
+
+        // ✅ Create Chart.js line chart
+        const ctx = document.getElementById("hoursChart").getContext("2d");
+        new Chart(ctx, {
+            type: "line",
+            data: chartData,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: "top" },
+                    tooltip: { mode: "index", intersect: false }
+                },
+                scales: {
+                    x: { title: { display: true, text: "Month" } },
+                    y: { title: { display: true, text: "Hours Worked" } }
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error("❌ Error parsing graph data:", error);
+    }
+});
+
+</script>
+
+
+
+
+{% endblock %}

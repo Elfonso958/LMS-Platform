@@ -1,0 +1,10 @@
+venv/
+*.pyc
+__pycache__/
+Course_Powerpoints/
+*.exe
+*.log
+*.db
+instance/
+.env
+.vscode/

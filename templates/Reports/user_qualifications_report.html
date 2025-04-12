@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .report-container {
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+    }
+    .report-container h1, .report-container h2 {
+        text-align: center;
+        color: #333;
+    }
+    .report-container table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+    }
+    .report-container th, .report-container td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+        cursor: pointer; /* Add cursor pointer for sortable columns */
+    }
+    .report-container th {
+        background-color: #f2f2f2;
+        color: #333;
+    }
+    .report-container tr:nth-child(even) {
+        background-color: #f9f9f9;
+    }
+    .report-container tr:hover {
+        background-color: #f1f1f1;
+    }
+    .report-container .section {
+        margin-bottom: 20px;
+    }
+    .print-button {
+        display: block;
+        width: 200px;
+        margin: 20px auto;
+        padding: 10px;
+        background-color: #4CAF50;
+        color: white;
+        text-align: center;
+        text-decoration: none;
+        border-radius: 5px;
+    }
+    .print-button:hover {
+        background-color: #45a049;
+    }
+    @media print {
+        .print-button, header {
+            display: none;
+        }
+        .timestamp {
+            display: block;
+            text-align: right;
+            margin-bottom: 10px;
+            font-size: 10px;
+            color: #666;
+        }
+    }
+</style>
+
+<div class="report-container">
+    <h1>User Qualifications Report</h1>
+    
+    <form method="POST" action="{{ url_for('user_qualifications_report') }}">
+        <div class="form-group">
+            <label for="user_id">Select User:</label>
+            <select name="user_id" id="user_id" class="form-control" onchange="this.form.submit()">
+                <option value="">-- Select User --</option>
+                {% for user in users %}
+                <option value="{{ user.id }}" {% if selected_user and user.id == selected_user.id %}selected{% endif %}>{{ user.username }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+
+    {% if selected_user %}
+    <div class="timestamp">
+        Printed on: {{ current_time.strftime('%d/%m/%y') }}
+    </div>
+    <div class="section">
+        <h2>Qualifications for {{ selected_user.username }}</h2>
+        <table id="qualificationsTable">
+            <thead>
+                <tr>
+                    <th onclick="sortTable(0)">Qualification</th>
+                    <th onclick="sortTable(1, 'date')">Valid From</th>
+                    <th onclick="sortTable(2, 'date')">Valid To</th>
+                    <th onclick="sortTable(3, 'number')">Days Remaining</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for qualification in qualifications %}
+                <tr>
+                    <td>{{ qualification.qualification }}</td>
+                    <td>{{ qualification.valid_from.strftime('%d/%m/%y') }}</td>
+                    <td>{% if qualification.valid_to %}{{ qualification.valid_to.strftime('%d/%m/%y') }}{% else %}N/A{% endif %}</td>
+                    <td>{% if qualification.valid_to %}{{ (qualification.valid_to - current_time).days }}{% else %}N/A{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    <a href="#" class="print-button" onclick="window.print()">Print Report</a>
+</div>
+
+<script>
+    function sortTable(n, type) {
+        var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+        table = document.getElementById("qualificationsTable");
+        switching = true;
+        dir = "asc"; 
+        while (switching) {
+            switching = false;
+            rows = table.rows;
+            for (i = 1; i < (rows.length - 1); i++) {
+                shouldSwitch = false;
+                x = rows[i].getElementsByTagName("TD")[n];
+                y = rows[i + 1].getElementsByTagName("TD")[n];
+                if (type === 'date') {
+                    x = new Date(x.innerHTML.split('/').reverse().join('-'));
+                    y = new Date(y.innerHTML.split('/').reverse().join('-'));
+                } else if (type === 'number') {
+                    x = x.innerHTML === "N/A" ? Infinity : parseFloat(x.innerHTML) || 0;
+                    y = y.innerHTML === "N/A" ? Infinity : parseFloat(y.innerHTML) || 0;
+                } else {
+                    x = x.innerHTML.toLowerCase();
+                    y = y.innerHTML.toLowerCase();
+                }
+                if (dir == "asc") {
+                    if (x > y) {
+                        shouldSwitch = true;
+                        break;
+                    }
+                } else if (dir == "desc") {
+                    if (x < y) {
+                        shouldSwitch = true;
+                        break;
+                    }
+                }
+            }
+            if (shouldSwitch) {
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+                switchcount ++;
+            } else {
+                if (switchcount == 0 && dir == "asc") {
+                    dir = "desc";
+                    switching = true;
+                }
+            }
+        }
+    }
+</script>
+{% endblock %}

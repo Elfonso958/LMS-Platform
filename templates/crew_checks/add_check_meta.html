@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Add Crew Check Meta{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Add Crew Check for {{ crew_check.name }}</h1>
+
+    <form method="POST">
+        <!-- Candidate Selection and Details -->
+        <div class="mb-3">
+            <label for="candidate_id" class="form-label">Select Candidate</label>
+            <select class="form-control" id="candidate_id" name="candidate_id" required>
+                <option value="">Select a Candidate</option>
+                {% for user in users %}
+                    <option value="{{ user.id }}">{{ user.username }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">License Type</label>
+            <input type="text" class="form-control" id="license_type" name="license_type" value="{{ candidate.license_type }}" disabled>
+        </div>
+        
+        <div class="mb-3">
+            <label class="form-label">License Number</label>
+            <input type="text" class="form-control" id="license_number" name="license_number" value="{{ candidate.license_number }}" disabled>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Medical Expiry</label>
+            <input type="text" class="form-control" id="medical_expiry" name="medical_expiry" value="{{ candidate.medical_expiry }}" disabled>
+        </div>
+
+        <!-- Other Details -->
+        <div class="mb-3">
+            <label for="date_of_test" class="form-label">Date of Test</label>
+            <input type="date" class="form-control" id="date_of_test" name="date_of_test" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="aircraft_type" class="form-label">Aircraft Type</label>
+            <input type="text" class="form-control" id="aircraft_type" name="aircraft_type" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="aircraft_registration" class="form-label">Aircraft Registration</label>
+            <input type="text" class="form-control" id="aircraft_registration" name="aircraft_registration" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="type_of_check" class="form-label">Type of Check</label>
+            <input type="text" class="form-control" id="type_of_check" name="type_of_check" required>
+        </div>
+
+        <!-- Check Items and Grading -->
+        <h3>Check Items</h3>
+        {% for item in check_items %}
+            <div class="mb-3">
+                <label class="form-label">{{ item.item_name }}</label>
+                <input type="checkbox" name="grade_{{ item.id }}" value="5"> 5
+                <input type="checkbox" name="grade_{{ item.id }}" value="4"> 4
+                <input type="checkbox" name="grade_{{ item.id }}" value="3"> 3
+                <input type="checkbox" name="grade_{{ item.id }}" value="2"> 2
+                <input type="checkbox" name="grade_{{ item.id }}" value="1"> 1
+                <input type="checkbox" name="na_{{ item.id }}" value="true"> NT
+            </div>
+        {% endfor %}
+
+        <!-- Other Fields -->
+        <div class="mb-3">
+            <label for="test_result" class="form-label">Test Result</label>
+            <select class="form-control" id="test_result" name="test_result" required>
+                <option value="Pass">Pass</option>
+                <option value="Fail">Fail</option>
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label for="logbook_sticker_issues" class="

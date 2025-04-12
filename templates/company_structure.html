@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5 text-center">
+    <h1 class="mb-4">🏢 Company Structure</h1>
+    
+    <div class="tree-container">
+        <div class="tree">
+            {% for job in root_jobs %}
+                {{ render_tree(job) | safe }}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+ <style>
+    .tree-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.tree {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+.node-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    margin: 0 15px; /* Adjust spacing between sibling nodes */
+}
+
+.node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #007bff;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 8px;
+    font-weight: bold;
+    text-align: center;
+    position: relative;
+    margin-top: 20px; /* Space above each node */
+    box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
+    min-width: 200px;
+}
+
+.connector {
+    width: 2px;
+    height: 20px;
+    background-color: #007bff;
+    position: absolute;
+    top: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.children {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    position: relative;
+    margin-top: 20px;
+    padding-top: 20px; /* Space for the horizontal line */
+}
+
+.children::before {
+    content: "";
+    position: absolute;
+    top: 0; /* Position at the top of the .children container */
+    left: 0;
+    right: 0;
+    border-top: 2px solid #007bff; /* Horizontal line color and thickness */
+}
+
+.children .node::before {
+    content: "";
+    position: absolute;
+    top: -15px;
+    left: 50%;
+    width: 2px;
+    height: 15px;
+    background-color: #007bff;
+}
+
+/* Horizontal lines between children */
+.children .node + .node::before {
+    content: "";
+    position: absolute;
+    top: -15px;
+    left: 50%;
+    width: 30px;
+    height: 2px;
+    background-color: #007bff;
+}
+
+ </style>
+ {% endblock %}

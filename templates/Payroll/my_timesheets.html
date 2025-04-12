@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="mb-4">📝 My Timesheets</h1>
+
+    {% if payroll_periods %}
+    <table class="table table-bordered">
+        <thead class="table-dark">
+            <tr>
+                <th>Payroll Period</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for period in payroll_periods %}
+            <tr>
+                <td>{{ period.start_date.strftime("%A %d %B %Y") }} - {{ period.end_date.strftime("%A %d %B %Y") }}</td>
+                <td>
+                    {% set status = payroll_statuses[period.id] %}
+                    <span class="badge 
+                        {% if status == 'Approved' %} bg-success
+                        {% elif status == 'Rejected' %} bg-danger
+                        {% elif status == 'Pending' %} bg-warning
+                        {% else %} bg-secondary{% endif %}">
+                        {{ status }}
+                    </span>
+                </td>
+                <td>
+                    <a href="{{ url_for('view_my_timesheet', payroll_period_id=period.id) }}" class="btn btn-primary btn-sm">
+                        View Details
+                    </a>
+                    {% if status == 'Rejected' %}
+                        <a href="{{ url_for('submit_weekly_timesheet', payroll_period_id=period.id) }}" class="btn btn-warning btn-sm">
+                            Resubmit
+                        </a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="alert alert-warning">You have not submitted any timesheets yet.</div>
+    {% endif %}
+</div>
+{% endblock %}

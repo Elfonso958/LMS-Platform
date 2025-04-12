@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Exam for {{ course.title }}</h1>
+
+    <form method="POST" action="{{ url_for('take_exam', course_id=course.id) }}">
+        {% for question in questions %}
+        <div class="mb-4">
+            <h5>{{ loop.index }}. {{ question.text }}</h5>
+            {% for answer in question.answers %}
+            <div class="form-check d-flex align-items-center">
+                <!-- Radio button -->
+                <input class="form-check-input me-2" type="radio" name="question_{{ question.id }}" id="answer_{{ answer.id }}" value="{{ answer.id }}">
+                <!-- Label -->
+                <label class="form-check-label" for="answer_{{ answer.id }}">
+                    {{ answer.text }}
+                </label>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary">Submit Exam</button>
+    </form>
+</div>
+{% endblock %}
