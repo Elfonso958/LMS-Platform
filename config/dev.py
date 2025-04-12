@@ -1,0 +1,17 @@
+DEBUG = True
+SQLALCHEMY_DATABASE_URI = 'mysql+mysqldb://root:7frzqt6n@127.0.0.1:3306/lms_test'
+SQLALCHEMY_TRACK_MODIFICATIONS = False
+SECRET_KEY = 'dev-secret'
+SESSION_COOKIE_SECURE = False
+REMEMBER_COOKIE_SECURE = False
+CURRENT_TEMPLATE_VERSION = 2
+
+MAIL_SERVER = 'send.xtra.co.nz'
+MAIL_PORT = 465
+MAIL_USE_TLS = False
+MAIL_USE_SSL = True
+MAIL_USERNAME = 'jayden_beck01@xtra.co.nz'
+MAIL_PASSWORD = '200102489Mac!'
+MAIL_DEFAULT_SENDER = 'jayden_beck01@xtra.co.nz'
+
+BASE_URL = 'http://127.0.0.1:5000/'

@@ -10,6 +10,16 @@
 </head>
 <body>
 <header>
+    {% if config['FLASK_CONFIG'] == 'config.dev' %}
+    <div class="bg-danger text-white text-center py-1">
+      ⚠️ DEVELOPMENT DATABASE
+    </div>
+  {% elif config['FLASK_CONFIG'] == 'config.prod' %}
+    <div class="bg-success text-white text-center py-1">
+      ✅ PRODUCTION DATABASE
+    </div>
+  {% endif %}
+
     <nav class="navbar navbar-expand-lg navbar-light bg-green">
         <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('user_dashboard') }}">LMS Platform</a>
