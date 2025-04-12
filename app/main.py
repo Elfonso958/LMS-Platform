@@ -60,6 +60,10 @@ EMPLOYEE_CACHE = TTLCache(maxsize=1000, ttl=3600)  # Stores up to 1000 employees
 
 # User loader for Flask-Login
 
+@app.route("/Test", methods=["GET", "POST"])
+def test():
+    print("Test For my Development Branch")
+
 @login_manager.user_loader
 def load_user(user_id):
     app.logger.debug(f"Loading user from session: {user_id}")
@@ -79,63 +83,10 @@ def load_crew_checks():
         ).all()
     else:
         g.crew_checks = []
-##############################
-###Global Route Permissions###
-##############################
+
 ##############################
 ### Global Route Permissions ###
 ##############################
-@app.route('/route_permissions', methods=['GET', 'POST'])
-@login_required
-@admin_required  # Only admins should be able to modify route access
-def route_permissions():
-    from flask import current_app
-
-    # 🔹 Get all available routes
-    all_routes = []
-    for rule in current_app.url_map.iter_rules():
-        route_info = {
-            "endpoint": rule.endpoint,
-            "methods": list(rule.methods - {"OPTIONS", "HEAD"}),  # Remove unwanted methods
-            "url": str(rule),
-        }
-        all_routes.append(route_info)
-
-    # 🔹 Fetch all roles
-    all_roles = RoleType.query.all()
-
-    # 🔹 Fetch existing permissions
-    existing_permissions = RoutePermission.query.all()
-    permission_map = {p.endpoint: [r.roleID for r in p.roles] for p in existing_permissions}
-    selected_date = request.args.get("date")  # Get date from frontend
-
-    if selected_date:
-        try:
-            selected_date = datetime.strptime(selected_date, "%Y-%m-%d").date()
-            flights = Flight.query.filter(db.func.date(Flight.departureScheduled) == selected_date).all()
-        except ValueError:
-            return jsonify({"message": "Invalid date format"}), 400
-    else:
-        flights = Flight.query.all()  # Return all flights if no date is provided
-        
-    if request.method == 'POST':
-        # Process role assignments
-        for route in all_routes:
-            selected_roles = request.form.getlist(f"roles_{route['endpoint']}")  # Get selected roles
-            permission = RoutePermission.query.filter_by(endpoint=route['endpoint']).first()
-
-            if not permission:
-                permission = RoutePermission(endpoint=route['endpoint'])
-                db.session.add(permission)
-
-            # Update roles
-            permission.roles = [RoleType.query.get(int(role_id)) for role_id in selected_roles]
-        
-        db.session.commit()
-        flash("Route permissions updated successfully!", "success")
-        return redirect(url_for('route_permissions'))
-
-    return render_template('admin/route_permissions.html', all_routes=all_routes, all_roles=all_roles, permission_map=permission_map)
 
 @app.before_request
 def check_route_permissions():
@@ -176,9 +127,7 @@ def generate_nonce():
     """Generate a unique nonce for authentication requests."""
     return os.urandom(16).hex()
 
-from werkzeug.security import check_password_hash
-
-@app.route("/login", methods=["GET", "POST"])
+@app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         username_or_email = request.form.get("username", "").strip()

@@ -43,4 +43,11 @@ def create_app():
     with app.app_context():
         from . import models
 
+    # ✅ Register blueprints
+    #from app.routes.auth_routes import auth_bp
+    #app.register_blueprint(auth_bp)
+
+    with app.app_context():
+        for rule in app.url_map.iter_rules():
+            print(rule)
     return app
