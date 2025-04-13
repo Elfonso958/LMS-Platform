@@ -12,4 +12,12 @@ set MAIL_DEFAULT_SENDER=your-email@example.com
 
 call venv\Scripts\activate.bat
 
-python main.py
+:: Activate venv
+call venv\Scripts\activate.bat
+
+:: Add root to PYTHONPATH
+set PYTHONPATH=%cd%
+
+:: Run the app
+python app\main.py
+
