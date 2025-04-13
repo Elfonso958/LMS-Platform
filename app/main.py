@@ -453,7 +453,10 @@ def delete_location(location_id):
 
 # Initialize the app and run
 if __name__ == "__main__":
-    #scheduler.init_app(app) Scheduler to send automatic emails for qualifications
-    #scheduler.start()  Scheduler to send automatic emails for qualifications
-    app.run(debug=True)
+    from waitress import serve
+    # Optional: enable these if you implement a scheduler
+    # scheduler.init_app(app)
+    # scheduler.start()
+
+    serve(app, host="0.0.0.0", port=80)
     
