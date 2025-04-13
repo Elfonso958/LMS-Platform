@@ -1,16 +1,54 @@
-from functools import wraps
-from flask import redirect, url_for, flash, current_app
-from flask_login import current_user
-from pptx import Presentation
-from PIL import Image, ImageDraw
-from fpdf import FPDF
-import shutil
-from comtypes.client import CreateObject
-import os, re
+import sys
+import os
+import json
+from sqlalchemy.exc import IntegrityError  # ✅ Fix missing import
+import secrets
+import requests
+import io
+import pdfkit
+import random, string
+import pytz
+import random
+from zoneinfo import ZoneInfo
 import pythoncom
-from app.models import Questions, Answers, Course
-from app import db
-from flask import abort
+import re
+nz_tz = ZoneInfo("Pacific/Auckland")
+
+# Add the parent directory to the system path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from win32com.client import Dispatch as CreateObject
+from flask import render_template, redirect, url_for, flash, request, current_app, send_from_directory, g, jsonify, session,Response
+from flask_bcrypt import Bcrypt
+from flask_login import LoginManager, login_user, logout_user, login_required,current_user,UserMixin
+from app import create_app, db, mail
+from app.models import Course, RoleType, UserSlideProgress, UserExamAttempt, Questions, Answers, UserAnswer, course_role, User, db, PayrollInformation, CrewCheck, CrewCheckMeta, CheckItem, user_role,CheckItemGrade, LineTrainingForm, Location, Port, HandlerFlightMap, GroundHandler, CrewAcknowledgement
+from app.models import Task,TaskCompletion,Topic, LineTrainingItem,UserLineTrainingForm, Sector, RosterChange, Flight, FormTemplate,RoutePermission,Qualification,EmployeeSkill, EmailConfig, JobTitle, Timesheet, Location, PayrollPeriod,PayrollInformation, NavItem, NavItemPermission # Import your models and database session
+from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash
+from werkzeug.utils import secure_filename
+from sqlalchemy.sql.expression import extract  # ✅ Import `extract`
+from pptx import Presentation
+from PIL import Image
+from flask import send_file
+import shutil, logging
+from datetime import datetime, timedelta
+from app.forms import LoginForm, LineTrainingFormEditForm, LineTrainingEmailConfigForm, CourseReminderEmailConfigForm, TimesheetForm  # Import your LoginForm
+from flask_mail import Message
+from app.email_utils import send_email_to_training_team, Send_Release_To_Supervisor_Email, send_course_reminders, send_qualification_reminders, send_qualification_expiry_email, send_timesheet_response
+from sqlalchemy.orm import joinedload
+from flask_apscheduler import APScheduler
+from itsdangerous import URLSafeTimedSerializer
+from flask.sessions import SecureCookieSessionInterface
+from app.roster_utils import normalize_duty, duty_dict, get_current_duty, fetch_and_save_flights, check_for_flight_changes, check_for_daily_changes
+from fpdf import FPDF
+from flask import send_file
+from sqlalchemy import func
+from sqlalchemy import text, bindparam
+from cachetools import TTLCache
+from app.forms import CREW_CHECK_FIELDS
+from collections import defaultdict
+from functools import wraps
+
 
 def admin_required(func):
     @wraps(func)
@@ -284,3 +322,42 @@ def roles_required(*roles):
         return decorated_function
     return wrapper
 
+
+def safe_strip(value):
+    """Strips a string safely, ensuring None values don't cause issues."""
+    return str(value).strip() if value else ""
+
+def normalize_datetime(dt):
+    """Converts different datetime formats into a consistent datetime object."""
+    if dt is None:
+        return None
+    if isinstance(dt, str):
+        return datetime.fromisoformat(dt.replace("T", " "))  # Ensure consistent format
+    return dt
+
+def normalize_crew_list(crew_list):
+    """Ensure crew_list is properly formatted and sorted before comparison."""
+    if isinstance(crew_list, str):
+        try:
+            crew_list = json.loads(crew_list)  # Convert JSON string to a list
+        except json.JSONDecodeError:
+            print("❌ Error decoding crew JSON")
+            return []
+
+    if not isinstance(crew_list, list):
+        return []
+
+    # Convert to a standardized format (list of lists)
+    formatted_crew = []
+    for c in crew_list:
+        if isinstance(c, dict):
+            formatted_crew.append([
+                c.get("employeeId", 0),
+                safe_strip(c.get("firstName", "")),
+                safe_strip(c.get("surname", "")),
+                c.get("position", "")
+            ])
+        elif isinstance(c, (list, tuple)) and len(c) == 4:
+            formatted_crew.append(list(c))  # Convert tuples to lists
+
+    return sorted(formatted_crew, key=lambda x: x[0])  # Sort by employeeId

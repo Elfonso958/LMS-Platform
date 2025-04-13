@@ -5,7 +5,7 @@
 {% block content %}
 <div class="container mt-5">
     <h1 class="mb-4">Active Line Training Forms</h1>
-    <form method="GET" action="{{ url_for('view_active_line_training_forms_for_examiners') }}" class="mb-3">
+    <form method="GET" action="{{ url_for('Line_Training.view_active_line_training_forms_for_examiners') }}" class="mb-3">
         <div class="input-group">
             <input type="text" name="search" class="form-control" placeholder="Search by Candidate Name or Form ID">
             <button type="submit" class="btn btn-primary">Search</button>
@@ -31,11 +31,11 @@
                     <td>{{ form.template.name }}</td>
                     <td>{{ form.created_at.strftime('%Y-%m-%d %H:%M:%S') if form.created_at else 'N/A' }}</td>
                     <td>
-                        <a href="{{ url_for('view_active_line_training_form', form_id=form.id) }}" class="btn btn-primary btn-sm">
+                        <a href="{{ url_for('Line_Training.view_active_line_training_form', form_id=form.id) }}" class="btn btn-primary btn-sm">
                             View
                         </a>
                         <!-- Add delete form for each active form -->
-                        <form method="POST" action="{{ url_for('delete_line_training_form', form_id=form.id) }}" style="display:inline;">
+                        <form method="POST" action="{{ url_for('Line_Training.delete_line_training_form', form_id=form.id) }}" style="display:inline;">
                             <input type="hidden" name="_method" value="DELETE">
                             <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this form?');">
                                 Delete

@@ -7,7 +7,7 @@
   <h1 class="mb-4">Checks</h1>
 
 <!-- Filter Form -->
-<form method="GET" action="{{ url_for('checks') }}">
+<form method="GET" action="{{ url_for('crew_checks.checks') }}">
   <div class="row mb-3">
     <div class="col-md-3">
       <label for="status_filter" class="form-label">Filter Checks</label>
@@ -64,25 +64,25 @@
         {% set order = request.args.get('order', 'asc') %}
 
         {% set order_value_check_name = 'asc' if sort_by != 'check_name' or order == 'desc' else 'desc' %}
-        <th><a href="{{ url_for('checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='check_name', order=order_value_check_name) }}">Check Name</a></th>
+        <th><a href="{{ url_for('crew_checks.checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='check_name', order=order_value_check_name) }}">Check Name</a></th>
         
         {% set order_value_aircraft_type = 'asc' if sort_by != 'aircraft_type' or order == 'desc' else 'desc' %}
-        <th><a href="{{ url_for('checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='aircraft_type', order=order_value_aircraft_type) }}">Aircraft Type</a></th>
+        <th><a href="{{ url_for('crew_checks.checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='aircraft_type', order=order_value_aircraft_type) }}">Aircraft Type</a></th>
         
         {% set order_value_candidate = 'asc' if sort_by != 'candidate' or order == 'desc' else 'desc' %}
-        <th><a href="{{ url_for('checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='candidate', order=order_value_candidate) }}">Candidate</a></th>
+        <th><a href="{{ url_for('crew_checks.checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='candidate', order=order_value_candidate) }}">Candidate</a></th>
         
         {% set order_value_date_of_test = 'asc' if sort_by != 'date_of_test' or order == 'desc' else 'desc' %}
-        <th class="date-column"><a href="{{ url_for('checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='date_of_test', order=order_value_date_of_test) }}">Date of Test</a></th>
+        <th class="date-column"><a href="{{ url_for('crew_checks.checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='date_of_test', order=order_value_date_of_test) }}">Date of Test</a></th>
         
         {% set order_value_test_result = 'asc' if sort_by != 'test_result' or order == 'desc' else 'desc' %}
-        <th><a href="{{ url_for('checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='test_result', order=order_value_test_result) }}">Test Result</a></th>
+        <th><a href="{{ url_for('crew_checks.checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='test_result', order=order_value_test_result) }}">Test Result</a></th>
         
         {% set order_value_status = 'asc' if sort_by != 'status' or order == 'desc' else 'desc' %}
-        <th><a href="{{ url_for('checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='status', order=order_value_status) }}">Status</a></th>
+        <th><a href="{{ url_for('crew_checks.checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='status', order=order_value_status) }}">Status</a></th>
         
         {% set order_value_next_check_due = 'asc' if sort_by != 'next_check_due' or order == 'desc' else 'desc' %}
-        <th class="date-column"><a href="{{ url_for('checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='next_check_due', order=order_value_next_check_due) }}">Next Check Due</a></th>
+        <th class="date-column"><a href="{{ url_for('crew_checks.checks', status=request.args.get('status', 'all'), aircraft=request.args.get('aircraft', 'all'), candidate=request.args.get('candidate', ''), sort_by='next_check_due', order=order_value_next_check_due) }}">Next Check Due</a></th>
         
         <th>Action</th>
       </tr>
@@ -113,15 +113,15 @@
             <td>
               {% if not completed %}
                 <!-- Link to complete the form -->
-                <a href="{{ url_for('crew_check_form', crew_check_id=check_meta.crew_check_id, draft_id=check_meta.id) }}" class="btn btn-warning btn-sm">Complete Form</a>
+                <a href="{{ url_for('crew_checks.crew_check_form', crew_check_id=check_meta.crew_check_id, draft_id=check_meta.id) }}" class="btn btn-warning btn-sm">Complete Form</a>
                 <!-- Delete button for incomplete checks -->
-                <form action="{{ url_for('delete_check_meta', meta_id=check_meta.id) }}" method="POST" style="display:inline;">
+                <form action="{{ url_for('crew_checks.delete_check_meta', meta_id=check_meta.id) }}" method="POST" style="display:inline;">
                   <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this incomplete check?');">
                     Delete
                   </button>
                 </form>
               {% else %}
-                <a href="{{ url_for('crew_check_form', crew_check_id=check_meta.crew_check_id, draft_id=check_meta.id) }}" class="btn btn-info btn-sm">View Form</a>
+                <a href="{{ url_for('crew_checks.crew_check_form', crew_check_id=check_meta.crew_check_id, draft_id=check_meta.id) }}" class="btn btn-info btn-sm">View Form</a>
               {% endif %}
             </td>
           </tr>

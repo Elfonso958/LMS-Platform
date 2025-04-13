@@ -7,7 +7,7 @@
     <h1>Manage Check Items for {{ crew_check.name }}</h1>
 
     <!-- Add Item Form -->
-    <form action="{{ url_for('add_check_item', check_id=crew_check.id) }}" method="POST">
+    <form action="{{ url_for('crew_checks.add_check_item', check_id=crew_check.id) }}" method="POST">
         <div class="mb-3">
             <label for="item_name" class="form-label">Item Name</label>
             <input type="text" class="form-control" id="item_name" name="item_name" required>

@@ -32,7 +32,7 @@
 <div class="report-container">
     <h1>Average Check Items Scores</h1>
     
-    <form method="POST" action="{{ url_for('Crew_Checks_Report') }}">
+    <form method="POST" action="{{ url_for('reports.Crew_Checks_Report') }}">
         <div class="form-group">
             <label for="check_type_id">Select Check Type:</label>
             <select name="check_type_id" id="check_type_id" class="form-control" onchange="this.form.submit()">

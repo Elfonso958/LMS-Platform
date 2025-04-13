@@ -3,13 +3,13 @@
 {% block content %}
 <div class="container mt-5">
     <h1>Edit Question</h1>
-    <form method="POST" action="{{ url_for('edit_question', question_id=question.id) }}">
+    <form method="POST" action="{{ url_for('course.edit_question', question_id=question.id) }}">
         <div class="mb-3">
             <label for="question_text" class="form-label">Question Text</label>
             <input type="text" class="form-control" id="question_text" name="question_text" value="{{ question.text }}" required>
         </div>
         <button type="submit" class="btn btn-primary">Update Question</button>
-        <a href="{{ url_for('manage_questions', course_id=question.course_id) }}" class="btn btn-secondary">Cancel</a>
+        <a href="{{ url_for('course.manage_questions', course_id=question.course_id) }}" class="btn btn-secondary">Cancel</a>
     </form>
 </div>
 {% endblock %}

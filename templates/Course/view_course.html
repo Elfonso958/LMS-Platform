@@ -9,21 +9,21 @@
     <div class="d-flex justify-content-between my-3">
         <!-- Previous Slide Button -->
         {% if prev_slide is not none %}
-            <a href="{{ url_for('view_course', course_id=course.id, slide=prev_slide) }}" class="btn btn-secondary">Previous Slide</a>
+            <a href="{{ url_for('course.view_course', course_id=course.id, slide=prev_slide) }}" class="btn btn-secondary">Previous Slide</a>
         {% else %}
             <button class="btn btn-secondary" disabled>Previous Slide</button>
         {% endif %}
         
         <!-- Next Slide or Finish/Take Exam Button -->
         {% if next_slide is not none %}
-            <a href="{{ url_for('view_course', course_id=course.id, slide=next_slide) }}" class="btn btn-primary">Next Slide</a>
+            <a href="{{ url_for('course.view_course', course_id=course.id, slide=next_slide) }}" class="btn btn-primary">Next Slide</a>
         {% else %}
             {% if show_finish %}
-            <form method="POST" action="{{ url_for('finish_course', course_id=course.id) }}" class="d-inline">
+            <form method="POST" action="{{ url_for('course.finish_course', course_id=course.id) }}" class="d-inline">
                 <button type="submit" class="btn btn-success">Finish</button>
             </form>
             {% elif show_take_exam %}
-                <a href="{{ url_for('take_exam', course_id=course.id) }}" class="btn btn-success">Take Exam</a>
+            <a href="{{ url_for('course.take_exam', course_id=course.id) }}" class="btn btn-success">Take Exam</a>
             {% else %}
                 <button class="btn btn-secondary" disabled>No Action Available</button>
             {% endif %}

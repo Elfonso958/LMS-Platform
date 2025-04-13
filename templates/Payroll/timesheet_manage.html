@@ -20,10 +20,10 @@
                 <td>{{ timesheet.hours_worked }}</td>
                 <td>{{ timesheet.description }}</td>
                 <td>
-                    <form method="POST" action="{{ url_for('update_timesheet_status', timesheet_id=timesheet.id, action='Approved') }}">
+                    <form method="POST" action="{{ url_for('payroll.update_timesheet_status', timesheet_id=timesheet.id, action='Approved') }}">
                         <button class="btn btn-success btn-sm">Approve</button>
                     </form>
-                    <form method="POST" action="{{ url_for('update_timesheet_status', timesheet_id=timesheet.id, action='Rejected') }}">
+                    <form method="POST" action="{{ url_for('payroll.update_timesheet_status', timesheet_id=timesheet.id, action='Rejected') }}">
                         <button class="btn btn-danger btn-sm">Reject</button>
                     </form>
                 </td>

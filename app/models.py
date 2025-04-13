@@ -1,10 +1,9 @@
 from flask_login import UserMixin
-from app import db
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, ForeignKey, func
-from app import db
 from sqlalchemy import event
 from sqlalchemy.dialects.mysql import BIGINT
+from app.extensions import db
 
 
 # Association Table for User and RoleType (Many-to-Many)

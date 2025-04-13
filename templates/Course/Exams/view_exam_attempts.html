@@ -29,16 +29,16 @@
                 <td>
                     <div class="d-flex flex-column flex-md-row gap-2">
                         <!-- View Answers -->
-                        <a href="{{ url_for('view_user_exam_attempt', attempt_id=attempt.id) }}" class="btn btn-info btn-sm">View Answers</a>
+                        <a href="{{ url_for('course.view_user_exam_attempt', attempt_id=attempt.id) }}" class="btn btn-info btn-sm">View Answers</a>
                         
                         <!-- Download Certificate -->
                         {% if attempt.certificate_path %}
-                            <a href="{{ url_for('download_certificate', attempt_id=attempt.id) }}" class="btn btn-success btn-sm">Download Certificate</a>
-                            <a href="{{ url_for('view_certificate', attempt_id=attempt.id) }}" target="_blank" class="btn btn-primary btn-sm">View Certificate</a>
+                            <a href="{{ url_for('course.download_certificate', attempt_id=attempt.id) }}" class="btn btn-success btn-sm">Download Certificate</a>
+                            <a href="{{ url_for('course.view_certificate', attempt_id=attempt.id) }}" target="_blank" class="btn btn-primary btn-sm">View Certificate</a>
                         {% endif %}
                 
                         <!-- Delete Button -->
-                        <form method="POST" action="{{ url_for('delete_exam_attempt', attempt_id=attempt.id) }}" class="m-0 p-0">
+                        <form method="POST" action="{{ url_for('course.delete_exam_attempt', attempt_id=attempt.id) }}" class="m-0 p-0">
                             <button type="submit" class="btn btn-danger btn-sm delete-button" onclick="return confirm('Are you sure you want to delete this attempt?')">
                                 Delete
                             </button>

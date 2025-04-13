@@ -4,7 +4,7 @@
 <div class="container mt-5">
     <h1>Exam for {{ course.title }}</h1>
 
-    <form method="POST" action="{{ url_for('take_exam', course_id=course.id) }}">
+    <form method="POST" action="{{ url_for('course.take_exam', course_id=course.id) }}">
         {% for question in questions %}
         <div class="mb-4">
             <h5>{{ loop.index }}. {{ question.text }}</h5>

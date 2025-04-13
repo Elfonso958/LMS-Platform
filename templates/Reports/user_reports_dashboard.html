@@ -42,7 +42,7 @@
     
     {% if show_dropdown %}
     <!-- Dropdown only visible to allowed roles -->
-    <form method="GET" action="{{ url_for('user_reports_dashboard') }}">
+    <form method="GET" action="{{ url_for('reports.user_reports_dashboard') }}">
         <div class="mb-3">
             <label for="user_ids" class="form-label">Select Users</label>
             <select class="form-control" id="user_ids" name="user_ids" multiple>

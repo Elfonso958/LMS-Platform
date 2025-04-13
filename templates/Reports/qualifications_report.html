@@ -65,7 +65,7 @@
 <div class="report-container">
     <h1>Qualifications Report</h1>
     
-    <form method="POST" action="{{ url_for('qualifications_report') }}">
+    <form method="POST" action="{{ url_for('reports.qualifications_report') }}">
         <div class="form-group">
             <label for="qualification">Select Qualification:</label>
             <select name="qualification" id="qualification" class="form-control" onchange="this.form.submit()">

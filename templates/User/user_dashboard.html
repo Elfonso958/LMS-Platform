@@ -17,7 +17,7 @@
                     <li class="list-group-item">
                         <strong>{{ course.title }}</strong>
                         <p>{{ course.description }}</p>
-                        <a href="{{ url_for('view_course', course_id=course.id) }}" class="btn btn-primary btn-sm">Start Course</a>
+                        <a href="{{ url_for('course.view_course', course_id=course.id) }}" class="btn btn-primary btn-sm">Start Course</a>
                     </li>
                     {% endfor %}
                 </ul>
@@ -35,7 +35,7 @@
                                 <strong>{{ course.title }}</strong>
                                 <p class="mb-1">{{ course.description }}</p>
                             </div>
-                            <a href="{{ url_for('view_course', course_id=course.id) }}" class="btn btn-info btn-sm">View Course</a>
+                            <a href="{{ url_for('course.view_course', course_id=course.id) }}" class="btn btn-info btn-sm">View Course</a>
                         </li>
                         {% endfor %}
                     </ul>
@@ -52,7 +52,7 @@
                             <strong>{{ course['course'].title }}</strong>
                             <p class="mb-1">Expires on: <span class="fw-bold">{{ course['expiry_date'].strftime('%A %d-%b-%Y') }}</span></p>
                         </div>
-                        <a href="{{ url_for('view_course', course_id=course['course'].id) }}" class="btn btn-outline-primary btn-sm">Renew Now</a>
+                        <a href="{{ url_for('course.view_course', course_id=course['course'].id) }}" class="btn btn-outline-primary btn-sm">Renew Now</a>
                     </li>
                     {% endfor %}
                 </ul>
@@ -70,7 +70,7 @@
                                 <strong>{{ expired_course['course'].title }}</strong>
                                 <p class="mb-1">Expired on: <span class="fw-bold">{{ expired_course['expiry_date'].strftime('%A %d-%b-%Y') }}</span></p>
                             </div>
-                            <a href="{{ url_for('view_course', course_id=expired_course['course'].id) }}" class="btn btn-warning btn-sm">Review Course</a>
+                            <a href="{{ url_for('course.view_course', course_id=expired_course['course'].id) }}" class="btn btn-warning btn-sm">Review Course</a>
                         </li>
                         {% endfor %}
                     </ul>

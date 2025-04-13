@@ -28,11 +28,11 @@
                     </span>
                 </td>
                 <td>
-                    <a href="{{ url_for('view_my_timesheet', payroll_period_id=period.id) }}" class="btn btn-primary btn-sm">
+                    <a href="{{ url_for('payroll.view_my_timesheet', payroll_period_id=period.id) }}" class="btn btn-primary btn-sm">
                         View Details
                     </a>
                     {% if status == 'Rejected' %}
-                        <a href="{{ url_for('submit_weekly_timesheet', payroll_period_id=period.id) }}" class="btn btn-warning btn-sm">
+                        <a href="{{ url_for('payroll.submit_weekly_timesheet', payroll_period_id=period.id) }}" class="btn btn-warning btn-sm">
                             Resubmit
                         </a>
                     {% endif %}

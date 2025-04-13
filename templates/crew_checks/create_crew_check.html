@@ -5,7 +5,7 @@
 {% block content %}
 <div class="container mt-5">
     <h1>Create Crew Check</h1>
-    <form action="{{ url_for('create_crew_check') }}" method="POST">
+    <form action="{{ url_for('crew_checks.create_crew_check') }}" method="POST">
         <div class="mb-3">
             <label for="name" class="form-label">Check Name</label>
             <input type="text" class="form-control" id="name" name="name" required>

@@ -5,7 +5,7 @@
     <h1 class="text-center">👤 User Profile</h1>
     <p class="text-center text-muted">Update your personal details below.</p>
 
-    <form method="POST" action="{{ url_for('user_profile', user_id=user.id) }}">
+    <form method="POST" action="{{ url_for('user.user_profile', user_id=user.id) }}">
         <div class="row">
             <div class="col-md-8">
                 <!-- Personal Information -->

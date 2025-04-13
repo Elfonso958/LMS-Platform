@@ -26,25 +26,25 @@
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
             <a class="nav-link {% if selected_tab == 'Pending' %}active{% endif %}" 
-               href="{{ url_for('payroll_dashboard', payroll_period_id=selected_payroll_period_id, status='Pending') }}">
+               href="{{ url_for('payroll.payroll_dashboard', payroll_period_id=selected_payroll_period_id, status='Pending') }}">
                 🟡 Pending ({{ employees['Pending']|length }})
             </a>
         </li>
         <li class="nav-item">
             <a class="nav-link {% if selected_tab == 'Approved' %}active{% endif %}" 
-               href="{{ url_for('payroll_dashboard', payroll_period_id=selected_payroll_period_id, status='Approved') }}">
+               href="{{ url_for('payroll.payroll_dashboard', payroll_period_id=selected_payroll_period_id, status='Approved') }}">
                 ✅ Approved ({{ employees['Approved']|length }})
             </a>
         </li>
         <li class="nav-item">
             <a class="nav-link {% if selected_tab == 'Rejected' %}active{% endif %}" 
-               href="{{ url_for('payroll_dashboard', payroll_period_id=selected_payroll_period_id, status='Rejected') }}">
+               href="{{ url_for('payroll.payroll_dashboard', payroll_period_id=selected_payroll_period_id, status='Rejected') }}">
                 ❌ Rejected ({{ employees['Rejected']|length }})
             </a>
         </li>
         <li class="nav-item">
             <a class="nav-link {% if selected_tab == 'Not Submitted' %}active{% endif %}" 
-               href="{{ url_for('payroll_dashboard', payroll_period_id=selected_payroll_period_id, status='Not Submitted') }}">
+               href="{{ url_for('payroll.payroll_dashboard', payroll_period_id=selected_payroll_period_id, status='Not Submitted') }}">
                 ⚠️ Not Submitted ({{ employees['Not Submitted']|length }})
             </a>
         </li>
@@ -75,7 +75,7 @@
                 </td>
                 <td>
                     {% if selected_tab != "Not Submitted" %}
-                        <a href="{{ url_for('view_employee_payroll', payroll_period_id=selected_payroll_period_id, user_id=employee.id) }}" 
+                        <a href="{{ url_for('payroll.view_employee_payroll', payroll_period_id=selected_payroll_period_id, user_id=employee.id) }}" 
                            class="btn btn-primary btn-sm">
                             View Payroll
                         </a>

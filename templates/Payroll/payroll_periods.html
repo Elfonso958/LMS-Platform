@@ -41,14 +41,14 @@
                 </td>
                 <td>
                     <!-- Toggle Status Button -->
-                    <form method="POST" action="{{ url_for('toggle_payroll_status', payroll_id=period.id) }}" style="display:inline;">
+                    <form method="POST" action="{{ url_for('payroll.toggle_payroll_status', payroll_id=period.id) }}" style="display:inline;">
                         <button class="btn btn-warning btn-sm">
                             {% if period.status == "Open" %}Close{% else %}Reopen{% endif %}
                         </button>
                     </form>
 
                     <!-- Delete Payroll Period -->
-                    <form method="POST" action="{{ url_for('delete_payroll_period', payroll_id=period.id) }}" onsubmit="return confirm('Are you sure?');" style="display:inline;">
+                    <form method="POST" action="{{ url_for('payroll.delete_payroll_period', payroll_id=period.id) }}" onsubmit="return confirm('Are you sure?');" style="display:inline;">
                         <button class="btn btn-danger btn-sm">Delete</button>
                     </form>
                 </td>

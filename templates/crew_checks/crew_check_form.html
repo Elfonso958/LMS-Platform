@@ -7,7 +7,7 @@
 <div class="container mt-5">
   <h1 class="mb-4">Crew Check Form</h1>
   <!-- Append draft_id as a query parameter if check_meta exists -->
-  <form method="POST" action="{{ url_for('crew_check_form', crew_check_id=crew_check.id) }}{% if check_meta %}?draft_id={{ check_meta.id }}{% endif %}">
+  <form method="POST" action="{{ url_for('crew_checks.crew_check_form', crew_check_id=crew_check.id) }}{% if check_meta %}?draft_id={{ check_meta.id }}{% endif %}">
     <!-- Candidate Information Section -->
     <div class="row mb-3">
       {% if 'candidate_name' in visible_fields %}
@@ -339,11 +339,11 @@
   <div class="row mt-4">
     <div class="col-md-6">
       <!-- Button to go back to the checks page -->
-      <a href="{{ url_for('checks') }}" class="btn btn-secondary">Back to Checks</a>
+      <a href="{{ url_for('crew_checks.checks') }}" class="btn btn-secondary">Back to Checks</a>
     </div>
     <div class="col-md-6 text-end">
       <!-- Button to print the check -->
-      <a href="{{ url_for('print_check', check_meta_id=check_meta.id) }}" target="_blank" class="btn btn-primary">Print Check</a>
+      <a href="{{ url_for('crew_checks.print_check', check_meta_id=check_meta.id) }}" target="_blank" class="btn btn-primary">Print Check</a>
     </div>
     {% endif %}
   </div>
@@ -517,7 +517,7 @@
         signFormData.append("crew_check_id", document.getElementById('crew_check_id').value);
         signFormData.append("draft_id", draftId);
 
-        return fetch("{{ url_for('verify_sign_password') }}", {
+        return fetch("{{ url_for('crew_checks.verify_sign_password') }}", {
           method: "POST",
           body: signFormData,
         });
@@ -634,7 +634,7 @@ function saveDraft() {
     .then(data => {
         if (data.success) {
             // Redirect back to the checks page upon successful draft save.
-            window.location.href = "{{ url_for('checks') }}";
+            window.location.href = "{{ url_for('crew_checks.checks') }}";
         } else {
             alert(data.error || "Error saving draft.");
         }
