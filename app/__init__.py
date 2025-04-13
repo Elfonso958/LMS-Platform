@@ -8,7 +8,8 @@ from flask_mail import Mail
 from app.models import Course, RoleType, UserSlideProgress, UserExamAttempt, Questions, Answers, UserAnswer, course_role, User, db, PayrollInformation, CrewCheck, CrewCheckMeta, CheckItem, user_role,CheckItemGrade, LineTrainingForm, Location, Port, HandlerFlightMap, GroundHandler, CrewAcknowledgement
 from app.models import Task,TaskCompletion,Topic, LineTrainingItem,UserLineTrainingForm, Sector, RosterChange, Flight, FormTemplate,RoutePermission,Qualification,EmployeeSkill, EmailConfig, JobTitle, Timesheet, Location, PayrollPeriod,PayrollInformation, NavItem, NavItemPermission # Import your models and database session
 from dotenv import load_dotenv
-
+from app.scheduler import scheduler
+from flask import g
 
 def create_app():
     """Application Factory"""
@@ -45,6 +46,16 @@ def create_app():
                     user.roles.append(role)
             db.session.commit()
         return user
+    
+    @app.before_request
+    def load_crew_checks():
+        if current_user.is_authenticated:
+            user_roles = [role.role_name for role in current_user.roles]
+            g.crew_checks = CrewCheck.query.filter(
+                CrewCheck.roles.any(RoleType.role_name.in_(user_roles))
+            ).all()
+        else:
+            g.crew_checks = []
 
     # Define upload folder for course PowerPoints
     upload_folder = os.path.join(os.getcwd(), 'Course_Powerpoints')
@@ -89,8 +100,13 @@ def create_app():
     from app.routes.payroll_routes import payroll_bp 
     app.register_blueprint(payroll_bp)
 
-    app.context_processor(inject_nav_structure)
+    from app.routes.scheduler_routes import scheduler_bp
+    app.register_blueprint(scheduler_bp)
 
+
+    app.context_processor(inject_nav_structure)
+    #scheduler.init_app(app)
+    #scheduler.start()
     with app.app_context():
         for rule in app.url_map.iter_rules():
             if 'delete' in str(rule):
