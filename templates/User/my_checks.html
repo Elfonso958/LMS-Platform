@@ -25,7 +25,7 @@
           <td>{{ check_meta.date_of_test }}</td>
           <td>{{ check_meta.test_result }}</td>
           <td>
-            <a href="{{ url_for('view_my_crew_check', meta_id=check_meta.id) }}" 
+            <a href="{{ url_for('crew_checks.view_my_crew_check', meta_id=check_meta.id) }}" 
                class="btn btn-info btn-sm">
                View Form
             </a>

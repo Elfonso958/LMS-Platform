@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Medical Certificate Expiry</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6;">
+    <h2 style="color: #d9534f;">Medical Certificate Expiry Reminder</h2>
+    <p>Dear {{ user.username }},</p>
+
+    <p>This is a reminder that your medical certificate is set to expire on <strong>{{ user.medical_expiry.strftime('%d %B %Y') }}</strong>.</p>
+
+    <p>Please ensure you take the necessary steps to renew it in time to maintain compliance.</p>
+
+    <p>If you've already completed your renewal, please disregard this message.</p>
+
+    <p>Best regards,<br>
+    Training & Compliance Team</p>
+</body>
+</html>

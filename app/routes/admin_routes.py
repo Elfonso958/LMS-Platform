@@ -20,9 +20,9 @@ from flask_login import login_user, logout_user, login_required, current_user
 
 from flask_bcrypt import Bcrypt
 from app import create_app, db, mail
-from app.models import Course, RoleType, UserSlideProgress, UserExamAttempt, Questions, Answers, UserAnswer, course_role, User, db, PayrollInformation, CrewCheck, CrewCheckMeta, CheckItem, user_role,CheckItemGrade, LineTrainingForm, Location, Port, HandlerFlightMap, GroundHandler, CrewAcknowledgement
-from app.models import Task,TaskCompletion,Topic, LineTrainingItem,UserLineTrainingForm, Sector, RosterChange, Flight, FormTemplate,RoutePermission,Qualification,EmployeeSkill, EmailConfig, JobTitle, Timesheet, Location, PayrollPeriod,PayrollInformation, NavItem, NavItemPermission # Import your models and database session
-from app.utils import extract_slides_to_png, calculate_exam_score, get_slide_count, admin_required, natural_sort_key, roles_required, generate_certificate
+from app.models import Course, RoleType, UserSlideProgress, UserExamAttempt, Questions, Answers, UserAnswer, course_role, User, db, PayrollInformation, CrewCheck, CrewCheckMeta, CheckItem, user_role,CheckItemGrade, LineTrainingForm, Location, Port, HandlerFlightMap, GroundHandler, CrewAcknowledgement, DocumentType
+from app.models import Task,TaskCompletion,Topic, LineTrainingItem,UserLineTrainingForm, Sector, RosterChange, Flight, FormTemplate,RoutePermission,Qualification,EmployeeSkill, EmailConfig, JobTitle, Timesheet, Location, PayrollPeriod,PayrollInformation, NavItem, NavItemPermission, DocumentReviewRequest # Import your models and database session
+from app.utils import extract_slides_to_png, calculate_exam_score, get_slide_count, admin_required, natural_sort_key, roles_required, generate_certificate, save_uploaded_document
 from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
@@ -32,10 +32,10 @@ from PIL import Image
 from flask import send_file, jsonify
 import shutil, logging
 from datetime import datetime, timedelta
-from app.forms import LoginForm, LineTrainingFormEditForm, LineTrainingEmailConfigForm, CourseReminderEmailConfigForm, TimesheetForm  # Import your LoginForm
+from app.forms import LoginForm, LineTrainingFormEditForm, LineTrainingEmailConfigForm, CourseReminderEmailConfigForm, TimesheetForm, DocumentTypeForm, CREW_CHECK_FIELDS, MedicalExpiryEmailConfigForm, DirectDocumentUploadForm  # Import your LoginForm
 from flask_mail import Message
-from app.email_utils import send_email_to_training_team, Send_Release_To_Supervisor_Email, send_course_reminders, send_qualification_reminders, send_qualification_expiry_email, send_timesheet_response
-from sqlalchemy.orm import joinedload
+from app.email_utils import send_email_to_training_team, Send_Release_To_Supervisor_Email, send_course_reminders, send_qualification_reminders, send_qualification_expiry_email, send_timesheet_response, send_email
+from sqlalchemy.orm import joinedload, aliased
 from flask_apscheduler import APScheduler
 from itsdangerous import URLSafeTimedSerializer
 from flask.sessions import SecureCookieSessionInterface
@@ -44,10 +44,8 @@ from fpdf import FPDF
 from sqlalchemy import func
 from sqlalchemy import text, bindparam
 from cachetools import TTLCache
-from app.forms import CREW_CHECK_FIELDS
 from collections import defaultdict
 from services.envision_api import fetch_and_assign_user_roles, fetch_all_employees, fetch_and_update_user_roles, fetch_and_update_roles  # Import the function to fetch and assign user roles from Envision
-
 
 admin_bp = Blueprint("admin", __name__)
 ENVISION_URL = "https://envision.airchathams.co.nz:8790/v1"
@@ -70,6 +68,7 @@ def switch_user():
 @admin_bp.route('/manage_navbar', methods=['GET', 'POST'])
 @login_required
 def manage_navbar():
+    available_endpoints = sorted(current_app.view_functions.keys())
     if request.method == 'POST':
         # Save permissions
         NavItemPermission.query.delete()
@@ -154,7 +153,8 @@ def manage_navbar():
         'admin/manage_navbar.html',
         nav_items=enriched_nav_items,
         all_roles=all_roles,
-        all_headers=nav_items  # already sorted
+        all_headers=nav_items,  # already sorted
+        available_endpoints=available_endpoints  # ✅ Add this
     )
 
 @admin_bp.route('/toggle_inherit_roles', methods=['POST'])
@@ -554,6 +554,7 @@ def email_config():
 
     line_training_form = LineTrainingEmailConfigForm(obj=config)
     course_reminder_form = CourseReminderEmailConfigForm(obj=config)
+    medical_expiry_form = MedicalExpiryEmailConfigForm(obj=config)  # ✅ new form
 
     # Populate role choices
     roles = RoleType.query.all()
@@ -566,12 +567,20 @@ def email_config():
             config.line_training_roles = ",".join(map(str, line_training_form.line_training_roles.data))
             db.session.commit()
             flash('Line Training configuration updated successfully.', 'success')
+
         elif request.form['submit'] == 'course_reminder' and course_reminder_form.validate_on_submit():
             config.course_reminder_days = course_reminder_form.course_reminder_days.data
             config.course_reminder_email = course_reminder_form.course_reminder_email.data
             db.session.commit()
             flash('Course Reminder configuration updated successfully.', 'success')
-        return redirect(url_for('email_config'))
+
+        elif request.form['submit'] == 'medical_expiry' and medical_expiry_form.validate_on_submit():
+            config.medical_expiry_days = medical_expiry_form.medical_expiry_days.data
+            config.medical_expiry_email = medical_expiry_form.medical_expiry_email.data
+            db.session.commit()
+            flash('Medical Expiry configuration updated successfully.', 'success')
+
+        return redirect(url_for('admin.email_config'))
 
     # Fetch users in the training team role for display
     training_team_role = RoleType.query.filter_by(role_name="Training Team").first()
@@ -582,12 +591,15 @@ def email_config():
     line_training_form.line_training_roles.data = config.get_line_training_roles()
     course_reminder_form.course_reminder_days.data = config.course_reminder_days
     course_reminder_form.course_reminder_email.data = config.course_reminder_email
+    medical_expiry_form.medical_expiry_days.data = str(config.medical_expiry_days or '')
+    medical_expiry_form.medical_expiry_email.data = config.medical_expiry_email
 
-    return render_template('emails/email_config.html', 
-                           line_training_form=line_training_form, 
-                           course_reminder_form=course_reminder_form, 
+    return render_template('emails/email_config.html',
+                           line_training_form=line_training_form,
+                           course_reminder_form=course_reminder_form,
+                           medical_expiry_form=medical_expiry_form,
                            training_team_users=training_team_users)
-    
+
 @admin_bp.route('/fetch_and_update_roles', methods=['GET'])
 @login_required
 @admin_required
@@ -645,3 +657,152 @@ def run_fetch_roles():
 def run_qualification_reminder_email():
     send_qualification_reminders()
     return "Email sent successfully."
+
+###############
+###Job Title###
+###############
+
+@admin_bp.route('/manage_job_titles', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def manage_job_titles():
+    job_titles = JobTitle.query.all()
+    users = User.query.all()
+    locations = Location.query.all()  # ✅ Fetch available locations
+
+    if request.method == 'POST':
+        title = request.form.get('title').strip()
+        manager_id = request.form.get('manager_id')
+        reports_to_id = request.form.get('reports_to_id')
+        location_id = request.form.get('location_id')  # ✅ Fetch selected location
+
+        has_timesheet_access = 'has_timesheet_access' in request.form
+        has_payroll_access = 'has_payroll_access' in request.form
+
+        if not title:
+            flash("Job title cannot be empty.", "danger")
+        elif JobTitle.query.filter_by(title=title, location_id=location_id).first():
+            flash("Job title already exists at this location.", "warning")
+        else:
+            new_job = JobTitle(
+                title=title,
+                manager_id=manager_id if manager_id else None,
+                reports_to=reports_to_id if reports_to_id else None,
+                location_id=location_id,  # ✅ Assign location
+                has_timesheet_access=has_timesheet_access,
+                has_payroll_access=has_payroll_access
+            )
+            db.session.add(new_job)
+            db.session.commit()
+            flash(f"Job title '{title}' added successfully.", "success")
+
+        return redirect(url_for('admin.manage_job_titles'))
+
+    # ✅ Generate `job_users_map` to track users assigned to each job title
+    job_users_map = {
+        job.id: [
+            {"id": user.id, "username": user.username, "email": user.email}
+            for user in User.query.filter_by(job_title_id=job.id).all()
+        ]
+        for job in job_titles
+    }
+
+    return render_template(
+        'admin/manage_job_titles.html',
+        job_titles=job_titles,
+        users=users,
+        locations=locations,  # ✅ Pass locations to template
+        job_users_map=job_users_map  # ✅ Pass job_users_map to template
+    )
+
+
+@admin_bp.route('/edit_job_title', methods=['POST'])
+@login_required
+@admin_required
+def edit_job_title():
+    job_id = request.form.get('job_id')
+    job = JobTitle.query.get_or_404(job_id)
+
+    job.title = request.form.get('title').strip()
+    job.manager_id = request.form.get('manager_id') if request.form.get('manager_id') else None
+    job.reports_to = request.form.get('reports_to_id') if request.form.get('reports_to_id') else None
+
+    # ✅ Update timesheet and payroll access
+    job.has_timesheet_access = 'has_timesheet_access' in request.form
+    job.has_payroll_access = 'has_payroll_access' in request.form
+
+    db.session.commit()
+    flash(f"Job title '{job.title}' updated successfully.", "success")
+
+    return redirect(url_for('admin.manage_job_titles'))
+
+
+@admin_bp.route('/delete_job_title/<int:job_id>', methods=['POST'])
+@login_required
+@admin_required
+def delete_job_title(job_id):
+    job = JobTitle.query.get_or_404(job_id)
+    affected_users = User.query.filter_by(job_title_id=job.id).all()
+
+    # ✅ If no users are assigned, delete the job title immediately
+    if not affected_users:
+        db.session.delete(job)
+        db.session.commit()
+        flash(f"Job title '{job.title}' deleted successfully.", "success")
+        return redirect(url_for('admin.manage_job_titles'))
+
+    # ✅ If users exist but admin confirms deletion, reset their job title and delete
+    if request.form.get('confirm_delete'):
+        for user in affected_users:
+            user.job_title_id = None  # Unassign job title
+
+        db.session.delete(job)
+        db.session.commit()
+        flash(f"Job title '{job.title}' and all assigned users' job titles have been removed.", "success")
+    else:
+        flash("Deletion canceled.", "info")
+
+    return redirect(url_for('admin.manage_job_titles'))
+
+##############################
+### Global Route Permissions ###
+##############################
+
+@admin_bp.before_request
+def check_route_permissions():
+    # List of routes that do not require authentication
+    allowed_routes = {'login', 'logout', 'static', 'reset_password', 'verify_sign_password'}
+
+    # If the user is not authenticated, only allow access to public routes
+    if not current_user.is_authenticated:
+        if request.endpoint and request.endpoint in allowed_routes:
+            return  # Allow access
+        return redirect(url_for('admin.login'))  # Redirect to login
+
+    # Admins have full access, skip permission checks
+    if current_user.is_admin:
+        return
+
+    # Get the current endpoint
+    endpoint = request.endpoint
+    if not endpoint:
+        return  # Skip checking if there's no endpoint (avoids errors)
+
+    # Skip permission checks for public and static routes
+    if endpoint in allowed_routes:
+        return
+
+    # Check if the route has assigned permissions
+    route_permission = RoutePermission.query.filter_by(endpoint=endpoint).first()
+    if route_permission:
+        allowed_roles = {role.role_name for role in route_permission.roles}
+        user_roles = {role.role_name for role in current_user.roles}
+
+        # If user lacks access, redirect to dashboard
+        if not allowed_roles.intersection(user_roles):
+            flash("You do not have permission to access this page.", "danger")
+            return redirect(url_for('user.user_dashboard'))
+
+def generate_nonce():
+    """Generate a unique nonce for authentication requests."""
+    return os.urandom(16).hex()

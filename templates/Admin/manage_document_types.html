@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Manage Document Types{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>Manage Document Types</h1>
+
+    <!-- Add New Document Type -->
+    <form method="POST" action="{{ url_for('admin.manage_document_types') }}" class="row g-3 mb-4">
+        {{ form.hidden_tag() }}
+        <div class="col-md-6">
+            {{ form.name.label(class="form-label") }}
+            {{ form.name(class="form-control") }}
+        </div>
+        <div class="col-md-12">
+            {{ form.submit(class="btn btn-success") }}
+        </div>
+    </form>
+
+    <!-- Table of Document Types -->
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Document Type</th>
+                <th style="width: 200px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for doc_type in document_types %}
+            <tr>
+                <form method="POST" action="{{ url_for('admin.update_document_type', id=doc_type.id) }}">
+                    <td>
+                        <input type="text" name="name" value="{{ doc_type.name }}" class="form-control">
+                    </td>
+                    <td>
+                        <button type="submit" class="btn btn-primary btn-sm">Update</button>
+                        <a href="{{ url_for('admin.delete_document_type', id=doc_type.id) }}" class="btn btn-danger btn-sm"
+                           onclick="return confirm('Are you sure you want to delete this document type?');">Delete</a>
+                    </td>
+                </form>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="2">No document types found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

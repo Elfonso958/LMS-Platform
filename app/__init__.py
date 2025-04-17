@@ -10,12 +10,15 @@ from app.models import Task,TaskCompletion,Topic, LineTrainingItem,UserLineTrain
 from dotenv import load_dotenv
 from app.scheduler import scheduler
 from flask import g
+from app.scheduler_jobs import medical_alerts
+from datetime import datetime
 
 def create_app():
     """Application Factory"""
 
-    # Load environment variables from .env file
-    load_dotenv()
+    # Load the correct .env file based on FLASK_CONFIG
+    env_file = ".env.dev" if os.getenv("FLASK_CONFIG") == "config.dev" else ".env.prod"
+    load_dotenv(env_file)
 
     app = Flask(__name__, template_folder='../templates', static_folder='../static')
 
@@ -27,12 +30,14 @@ def create_app():
     config_name = os.getenv('FLASK_CONFIG', 'config.dev')
     app.config.from_object(config_name)
     app.config['FLASK_CONFIG'] = config_name
-
+    app.jinja_env.filters['human_date'] = format_human_date
+    
     # Initialize extensions
     db.init_app(app)
     mail.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
+    login_manager.login_view = "auth.login" 
 
     @login_manager.user_loader
     def load_user(user_id):
@@ -103,18 +108,19 @@ def create_app():
     from app.routes.scheduler_routes import scheduler_bp
     app.register_blueprint(scheduler_bp)
 
+    from app.routes.company_structure_routes import company_bp
+    app.register_blueprint(company_bp)
+
+    from app.routes.hr_rotues import hr_bp
+    app.register_blueprint(hr_bp)
+
+    from app.routes.document_routes import document_bp
+    app.register_blueprint(document_bp)
 
     app.context_processor(inject_nav_structure)
     #scheduler.init_app(app)
     #scheduler.start()
-    with app.app_context():
-        for rule in app.url_map.iter_rules():
-            if 'delete' in str(rule):
-                print(f"{rule.endpoint} => {rule.methods} => {rule.rule}")
-                        
-    with app.app_context():
-        for rule in app.url_map.iter_rules():
-            print(rule)
+    
     return app
 
 def inject_nav_structure():
@@ -169,3 +175,14 @@ def inject_nav_structure():
         return nav_structure
 
     return dict(user_nav_items=get_nav_for_user(current_user))
+
+def format_human_date(value):
+    if isinstance(value, datetime):
+        return value.strftime('%A %d %B')  # e.g., Monday 11 May
+    elif isinstance(value, str):
+        try:
+            parsed = datetime.strptime(value, "%Y-%m-%d")
+            return parsed.strftime('%A %d %B')
+        except ValueError:
+            return value
+    return value

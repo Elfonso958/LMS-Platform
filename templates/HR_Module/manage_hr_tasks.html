@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Sticky header with lowered z-index (if needed) -->
+<style>
+  .sticky-top {
+    z-index: 900 !important;
+  }
+  .card-onboarding {
+  background-color: #e8f5e9; /* light green */
+}
+.card-offboarding {
+  background-color: #fff3e0; /* light orange */
+}
+  .card-onboarding .card-body,
+  .card-offboarding .card-body {
+    background-color: transparent !important;
+  }
+  .card-onboarding .card-footer,
+  .card-offboarding .card-footer {
+    background-color: transparent !important;
+  }
+</style>
+<div class="sticky-top bg-light px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
+  <h4 class="mb-0">Task Templates</h4>
+  <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addTaskModal">
+    + New Task
+  </button>
+</div>
+
+<!-- Search and Filter -->
+<div class="container-fluid py-3">
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <div class="input-group">
+        <span class="input-group-text">🔍</span>
+        <input id="taskSearch" type="text" class="form-control" placeholder="Search tasks...">
+      </div>
+    </div>
+    <div class="col-md-3">
+      <select id="phaseFilter" class="form-select">
+        <option value="">All Phases</option>
+        <option value="onboarding">Onboarding</option>
+        <option value="offboarding">Offboarding</option>
+      </select>
+    </div>
+  </div>
+
+<!-- Task Cards -->
+<div class="row g-3" id="taskGrid">
+  {% for task in tasks %}
+  <div class="col-md-6 col-lg-4" data-id="{{ task.id }}" data-phase="{{ task.phase | lower }}">
+    <div class="card h-100 shadow-sm border-0 
+      {% if task.phase == 'onboarding' %}card-onboarding
+      {% elif task.phase == 'offboarding' %}card-offboarding
+      {% endif %}">
+
+      <div class="card-body">
+        <h5 class="card-title">{{ task.name }}</h5>
+
+        <!-- Badges & View Button -->
+        <div class="d-flex flex-wrap align-items-center mb-2 gap-2">
+          <span class="badge rounded-pill bg-secondary">Due {{ task.days_before or 0 }} days</span>
+          <span class="badge rounded-pill bg-warning text-dark">{{ task.timing }}</span>
+          <span class="badge rounded-pill bg-info text-white">{{ task.phase }} date</span>
+
+          <div class="w-100"></div>
+
+          {% if task.responsible_job_title and task.responsible_job_title.manager %}
+            <span class="badge rounded-pill bg-success text-white">
+              Responsible: {{ task.responsible_job_title.manager.username }}
+            </span>
+          {% else %}
+            <span class="badge rounded-pill bg-secondary">—</span>
+          {% endif %}
+
+          <div class="w-100"></div>
+
+          <button class="view-assigned-btn btn btn-sm btn-outline-info d-flex align-items-center"
+                  data-assigned="{{ task.assigned_job_titles | map(attribute='title') | join(',') }}">
+            <i class="bi bi-eye-fill me-1"></i> View Job Titles
+          </button>
+        </div>
+
+        <p class="card-text text-muted"
+           data-bs-toggle="popover"
+           data-bs-trigger="hover focus"
+           data-bs-content="{{ task.description }}">
+          {{ task.description|truncate(60) }}
+        </p>
+      </div>
+
+      <div class="card-footer text-end">
+        <button class="btn btn-sm btn-outline-primary edit-btn me-1"
+                data-bs-toggle="modal"
+                data-bs-target="#editTaskModal"
+                data-id="{{ task.id }}"
+                data-name="{{ task.name }}"
+                data-phase="{{ task.phase }}"
+                data-timing="{{ task.timing }}"
+                data-daysbefore="{{ task.days_before }}"
+                data-responsibletitle="{{ task.responsible_job_title_id }}"
+                data-email="{{ task.responsible_email or '' }}"
+                data-jobtitles="{{ task.assigned_job_titles | map(attribute='id') | join(',') }}"
+                data-description="{{ task.description }}">
+          ✎
+        </button>
+        <button class="btn btn-sm btn-outline-danger delete-btn">🗑</button>
+      </div>
+
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+
+<!-- Add Task Modal -->
+<div class="modal fade" id="addTaskModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <form id="addForm" class="modal-content" method="POST" action="/create_hr_task">
+      <div class="modal-header">
+        <h5 class="modal-title">Add New Task</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Task Name</label>
+          <input type="text" name="name" class="form-control" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Phase</label>
+          <select name="phase" class="form-select" required>
+            <option value="onboarding">Onboarding</option>
+            <option value="offboarding">Offboarding</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Responsible Job Title</label>
+          <select id="addResponsibleJobTitle" name="responsible_job_title_id" class="form-select" required>
+            <option value="">Select</option>
+            {% for jt in job_titles %}
+              <option value="{{ jt.id }}" data-email="{{ jt.manager.email if jt.manager else '' }}">{{ jt.title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Manager Email</label>
+          <input type="email" id="addEmailInput" name="responsible_email" class="form-control" readonly required>
+        </div>
+        <div class="col-md-12">
+          <label class="form-label">Assign to Job Titles</label>
+          <select name="assigned_job_title_ids" class="form-select" multiple required>
+            {% for jt in job_titles %}
+              <option value="{{ jt.id }}">{{ jt.title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Due Offset (Days)</label>
+          <input type="number" name="days_before" class="form-control" placeholder="e.g. 5">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Timing</label>
+          <select name="timing" class="form-select" required>
+            <option value="before">Before</option>
+            <option value="after">After</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Description</label>
+          <textarea name="description" class="form-control" rows="3" placeholder="Optional details…"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-success">Create Task</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Task Modal (same structure as add, but prefilled via JS) -->
+<div class="modal fade" id="editTaskModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <form id="editForm" class="modal-content" method="POST">
+      <div class="modal-header">
+        <h5 class="modal-title">Edit Task</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body row g-3">
+        <input type="hidden" id="editTaskId" name="id">
+        <div class="col-md-6">
+          <label class="form-label">Task Name</label>
+          <input type="text" class="form-control" id="editName" name="name" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Phase</label>
+          <select class="form-select" id="editPhase" name="phase" required>
+            <option value="onboarding">Onboarding</option>
+            <option value="offboarding">Offboarding</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Responsible Job Title</label>
+          <select id="editResponsibleJobTitle" class="form-select" name="responsible_job_title_id">
+            <option value="">Select</option>
+            {% for jt in job_titles %}
+              <option value="{{ jt.id }}" data-email="{{ jt.manager.email if jt.manager else '' }}">{{ jt.title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Manager Email</label>
+          <input type="email" class="form-control" id="editEmail" name="responsible_email">
+        </div>
+        <div class="col-md-12">
+          <label class="form-label">Assign to Job Titles</label>
+          <select id="editJobTitles" class="form-select" name="assigned_job_title_ids" multiple required>
+            {% for jt in job_titles %}
+              <option value="{{ jt.id }}">{{ jt.title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Due Offset (Days)</label>
+          <input type="number" class="form-control" id="editDaysBefore" name="days_before">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Timing</label>
+          <select id="editTiming" class="form-select" name="timing">
+            <option value="before">Before</option>
+            <option value="after">After</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Description</label>
+          <textarea class="form-control" id="editDescription" name="description"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+<div class="modal fade" id="viewAssignedModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Assigned Job Titles</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <ul id="assignedList" class="list-group"></ul>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // 1. Initialize Bootstrap popovers
+    document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => {
+      new bootstrap.Popover(el);
+    });
+  
+    // 2. Auto-fill manager email (Add modal)
+    const addSelect = document.getElementById('addResponsibleJobTitle');
+    addSelect?.addEventListener('change', function () {
+      const email = this.selectedOptions[0]?.dataset.email || '';
+      document.getElementById('addEmailInput').value = email;
+    });
+  
+    // 3. Auto-fill manager email (Edit modal)
+    const editSelect = document.getElementById('editResponsibleJobTitle');
+    editSelect?.addEventListener('change', function () {
+      const email = this.selectedOptions[0]?.dataset.email || '';
+      document.getElementById('editEmail').value = email;
+    });
+  
+    // 4. Delete & Edit logic
+    const grid = document.getElementById('taskGrid');
+    grid?.addEventListener('click', e => {
+      const target = e.target;
+  
+      // Handle Delete
+      if (target.matches('.delete-btn')) {
+        const cardCol = target.closest('[class^="col-"]');
+        const taskId = cardCol?.dataset.id;
+        if (!taskId) return;
+        if (confirm('Delete this task?')) {
+          fetch(`/delete_hr_task/${taskId}`, { method: 'POST' })
+            .then(res => {
+              if (res.ok) cardCol.remove();
+              else alert('Error deleting task.');
+            });
+        }
+      }
+  
+      // Handle Edit
+      if (target.matches('.edit-btn')) {
+        const btn = target;
+        const modalEl = document.getElementById('editTaskModal');
+        const mf = selector => modalEl.querySelector(selector);
+  
+        mf('#editTaskId').value = btn.dataset.id;
+        mf('#editName').value = btn.dataset.name;
+        mf('#editPhase').value = btn.dataset.phase;
+        mf('#editTiming').value = btn.dataset.timing;
+        mf('#editDaysBefore').value = btn.dataset.daysbefore;
+        mf('#editResponsibleJobTitle').value = btn.dataset.responsibletitle;
+        mf('#editEmail').value = btn.dataset.email;
+        mf('#editDescription').value = btn.dataset.description;
+  
+        // Assigned job titles
+        const ids = (btn.dataset.jobtitles || '').split(',');
+        const selectEl = document.getElementById('editJobTitles');
+        Array.from(selectEl.options).forEach(opt => {
+          opt.selected = ids.includes(opt.value);
+        });
+  
+        new bootstrap.Modal(modalEl).show();
+      }
+  
+      // Handle Assigned View Button
+      if (target.matches('.view-assigned-btn')) {
+        const titles = target.dataset.assigned.split(',');
+        const ul = document.getElementById('assignedList');
+        ul.innerHTML = '';
+        titles.forEach(t => {
+          const li = document.createElement('li');
+          li.className = 'list-group-item';
+          li.textContent = t;
+          ul.appendChild(li);
+        });
+        new bootstrap.Modal(document.getElementById('viewAssignedModal')).show();
+      }
+    });
+  
+    // 5. Submit Edit Form
+    const editForm = document.getElementById('editForm');
+    editForm?.addEventListener('submit', function (e) {
+      e.preventDefault();
+  
+      const taskId = document.getElementById('editTaskId').value;
+      const payload = {
+        name: document.getElementById('editName').value,
+        phase: document.getElementById('editPhase').value,
+        timing: document.getElementById('editTiming').value,
+        days_before: parseInt(document.getElementById('editDaysBefore').value, 10) || 0,
+        responsible_email: document.getElementById('editEmail').value,
+        responsible_job_title_id: document.getElementById('editResponsibleJobTitle').value,
+        assigned_job_title_ids: Array.from(document.getElementById('editJobTitles').selectedOptions).map(o => o.value),
+        description: document.getElementById('editDescription').value
+      };
+  
+      fetch(`/update_hr_task/${taskId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(res => {
+        if (res.ok) window.location.reload();
+        else alert('Failed to update task.');
+      });
+    });
+  
+    // 6. Live Search
+    const searchInput = document.getElementById('taskSearch');
+    searchInput?.addEventListener('input', function () {
+      const q = this.value.toLowerCase();
+      document.querySelectorAll('#taskGrid .card').forEach(card => {
+        const title = card.querySelector('.card-title')?.textContent.toLowerCase() || '';
+        card.parentElement.classList.toggle('d-none', !title.includes(q));
+      });
+    });
+  
+    // 7. Phase Filter
+    phaseFilter?.addEventListener('change', function () {
+      const selectedPhase = this.value.toLowerCase(); // e.g. "onboarding", "offboarding"
+      document.querySelectorAll('#taskGrid [data-phase]').forEach(col => {
+        const taskPhase = col.dataset.phase;
+        const shouldShow = !selectedPhase || taskPhase === selectedPhase;
+        col.classList.toggle('d-none', !shouldShow);
+      });
+    });
+
+  
+    // 8. Clean up backdrop after closing edit modal
+    const editModalEl = document.getElementById('editTaskModal');
+    editModalEl?.addEventListener('hidden.bs.modal', () => {
+      document.body.classList.remove('modal-open');
+      document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+    });
+  });
+  </script>
+  
+{% endblock %}

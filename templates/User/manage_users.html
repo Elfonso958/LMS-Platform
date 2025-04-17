@@ -12,7 +12,7 @@
     </div>
 
     <!-- User Search & Role Filter -->
-    <form method="GET" action="{{ url_for('manage_users') }}" class="row g-3 mb-4">
+    <form method="GET" action="{{ url_for('admin.manage_users') }}" class="row g-3 mb-4">
         <div class="col-md-4">
             <input type="text" name="name_filter" class="form-control" placeholder="🔍 Search by name..." value="{{ name_filter }}">
         </div>
@@ -58,7 +58,7 @@
                 {% for user in users %}
                 <tr>
                     <td>
-                        <a href="{{ url_for('user_profile', user_id=user.id) }}" class="text-decoration-none">
+                        <a href="{{ url_for('user.user_profile', user_id=user.id) }}" class="text-decoration-none">
                             {{ user.username }}
                         </a>
                     </td>
@@ -97,13 +97,13 @@
                     </td>
                     <td class="text-center">
                         {% if user.is_active %}
-                        <form method="POST" action="{{ url_for('archive_user', user_id=user.id) }}" class="d-inline">
+                        <form method="POST" action="{{ url_for('admin.archive_user', user_id=user.id) }}" class="d-inline">
                             <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('Archive this user?')">
                                 📁 Archive
                             </button>
                         </form>
                         {% else %}
-                        <form method="POST" action="{{ url_for('reinstate_user', user_id=user.id) }}" class="d-inline">
+                        <form method="POST" action="{{ url_for('admin.reinstate_user', user_id=user.id) }}" class="d-inline">
                             <button type="submit" class="btn btn-success btn-sm">
                                 🔄 Reinstate
                             </button>
@@ -124,7 +124,7 @@
                     <h5 class="modal-title" id="addUserModalLabel">➕ Add New User</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form id="addUserForm" method="POST" action="{{ url_for('manage_users') }}">
+                <form id="addUserForm" method="POST" action="{{ url_for('admin.manage_users') }}">
                     <div class="modal-body">
                         <!-- Nav tabs -->
                         <ul class="nav nav-tabs" id="userFormTabs" role="tablist">

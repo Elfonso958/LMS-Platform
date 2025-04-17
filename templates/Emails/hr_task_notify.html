@@ -1,0 +1,7 @@
+<p>Hello,</p>
+<p>Please complete the following onboarding task for <strong>{{ user.username }}</strong>:</p>
+
+<p><strong>Task:</strong> {{ task_template.name }}<br>
+<strong>Description:</strong> {{ task_template.description }}</p>
+
+<a href="{{ url_for('hr.sign_off_task', user_id=user.id, task_template_id=task_template.id, _external=True) }}">Mark as Complete</a>

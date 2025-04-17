@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Recruitment Approval Form</h2>
+    <form method="POST" class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label">1. Name of Hiring Manager</label>
+            <input type="text" name="hiring_manager_name" class="form-control" required>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">2. Department</label>
+            <select name="department_id" class="form-select" required>
+                <option value="">Select Department</option>
+                {% for dept in departments %}
+                    <option value="{{ dept.id }}">{{ dept.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">3. Location</label>
+            <select name="location_id" class="form-select" required>
+                <option value="">Select Location</option>
+                {% for loc in locations %}
+                    <option value="{{ loc.id }}">{{ loc.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-8">
+            <label class="form-label">4. Role Title Being Recruited For</label>
+            <select name="job_title_id" class="form-select" required>
+                <option value="">Select Job Title</option>
+                {% for jt in job_titles %}
+                    <option value="{{ jt.id }}">{{ jt.title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">5. How many people are being recruited for?</label>
+            <input type="number" name="number_of_positions" class="form-control" min="1" required>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">6. Is this a...</label>
+            <select name="recruitment_type_id" class="form-select">
+                {% for rt in recruitment_types %}
+                    <option value="{{ rt.id }}">{{ rt.label }}</option>
+                {% endfor %}
+              </select>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">7. Type of Employment</label>
+            <select name="employment_type_id" class="form-select" required>
+                <option value="">Select Type</option>
+                {% for et in employment_types %}
+                    <option value="{{ et.id }}">{{ et.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-12">
+            <label class="form-label">8. Justification</label>
+            <textarea name="justification" class="form-control" rows="4" required></textarea>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">9. Is there a Position Description for the role?</label>
+            <select name="has_position_description" class="form-select" required>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+            </select>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label">10. What is the remuneration range for this role?</label>
+            <input type="text" name="remuneration_range" class="form-control" required>
+        </div>
+
+        <div class="col-12">
+            <label class="form-label">11. Your name</label>
+            <input type="text" name="submitted_by" class="form-control" value="{{ current_user.username }}" readonly>
+        </div>
+
+        <div class="col-12 d-grid mt-3">
+            <button type="submit" class="btn btn-success">Submit Recruitment Request</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

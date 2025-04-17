@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .section-divider {
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    border-top: 2px solid #ccc;
+  }
+  .section-header {
+    background-color: #f1f4f9;
+    padding: 0.75rem 1rem;
+    border-left: 4px solid #0d6efd;
+    margin-bottom: 1rem;
+    margin-top: 2rem;
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #0d2545;
+  }
+  @media (min-width: 992px) {
+    #form-nav {
+      position: sticky;
+      top: 80px;
+    }
+  }
+</style>
+
+<div class="container-fluid mt-4">
+  <div class="row">
+    <!-- SIDEBAR NAVIGATION -->
+    <div class="col-lg-2 d-none d-lg-block">
+      <div id="form-nav" class="bg-light border rounded p-3">
+        <h6 class="mb-2">Sections</h6>
+        <ul class="nav flex-column small">
+          <li><a href="#section-personal" class="nav-link">Personal Info</a></li>
+          <li><a href="#section-emergency" class="nav-link">Emergency Contact</a></li>
+          <li><a href="#section-employment" class="nav-link">Employment</a></li>
+          <li><a href="#section-access" class="nav-link">Access</a></li>
+          <li><a href="#section-license" class="nav-link">Licensing</a></li>
+          <li><a href="#section-onboarding" class="nav-link">Onboarding</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- MAIN FORM -->
+    <div class="col-lg-10">
+      <h2>Create New User</h2>
+      <form method="POST" class="row g-3" id="createUserForm">
+
+        <!-- PERSONAL INFO -->
+        <div class="col-12 section-header" id="section-personal">Personal Information</div>
+        <div class="col-md-6">
+          <label>Full Name</label>
+          <input name="username" class="form-control" required>
+        </div>
+        <div class="col-md-6">
+          <label>Email</label>
+          <input name="email" type="email" class="form-control" required>
+        </div>
+        <div class="col-md-6">
+          <label>Phone Number</label>
+          <input name="phone_number" class="form-control">
+        </div>
+        <div class="col-md-6">
+          <label>Date of Birth</label>
+          <input name="date_of_birth" type="date" class="form-control">
+        </div>
+
+        <!-- EMERGENCY -->
+        <div class="col-12 section-header" id="section-emergency">Emergency Contact</div>
+        <div class="col-md-6">
+          <label>Next of Kin</label>
+          <input name="next_of_kin" class="form-control">
+        </div>
+        <div class="col-md-6">
+          <label>Kin Phone Number</label>
+          <input name="kin_phone_number" class="form-control">
+        </div>
+        <div class="col-12">
+          <label>Address</label>
+          <input name="address" class="form-control">
+        </div>
+
+        <!-- EMPLOYMENT -->
+        <div class="col-12 section-header" id="section-employment">Employment Details</div>
+        <div class="col-md-4">
+          <label>Crew Code</label>
+          <input name="crew_code" class="form-control">
+        </div>
+        <div class="col-md-4">
+          <label>Job Title</label>
+          <select name="job_title_id" class="form-select" id="job_title_id" onchange="updateManagerDisplay()" required>
+            <option value="">Select Job Title</option>
+            {% for jt in job_titles %}
+            <option value="{{ jt.id }}" data-manager="{{ jt.manager.username if jt.manager else '—' }}">{{ jt.title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label>Manager</label>
+          <input type="text" class="form-control" id="job_manager" readonly placeholder="—">
+        </div>
+        <div class="col-md-4">
+          <label>Location</label>
+          <select name="location_id" class="form-select">
+            <option value="">Select Location</option>
+            {% for loc in locations %}
+            <option value="{{ loc.id }}">{{ loc.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label>Auth Type <span title="Used to determine login method. Password not required if 'Envision' is selected">❔</span></label>
+          <select name="auth_type" id="auth_type" class="form-select" onchange="toggleAuthFields()">
+            <option value="local">Local</option>
+            <option value="envision">Envision</option>
+          </select>
+        </div>
+        <div class="col-md-4" id="passwordField">
+          <label>Password</label>
+          <input name="password" type="password" class="form-control">
+        </div>
+
+        <!-- ACCESS -->
+        <div class="col-12 section-header" id="section-access">Access Control</div>
+        <div class="col-md-6">
+        <label>Roles <span title="Roles will auto assign if Envision authtype used">❔</span></label>
+          <select name="role_ids" class="form-select" multiple>
+            {% for role in roles %}
+            <option value="{{ role.roleID }}">{{ role.role_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="is_admin">
+            <label class="form-check-label">Admin</label>
+          </div>
+        </div>
+
+        <!-- LICENSING -->
+        <div class="col-12 section-header" id="section-license">Licensing</div>
+        <div class="col-md-4">
+          <label>License Type</label>
+          <input name="license_type" class="form-control">
+        </div>
+        <div class="col-md-4">
+          <label>License Number</label>
+          <input name="license_number" class="form-control">
+        </div>
+        <div class="col-md-4">
+          <label>Medical Expiry</label>
+          <input name="medical_expiry" type="date" class="form-control">
+        </div>
+
+        <!-- ONBOARDING -->
+        <div class="col-12 section-header" id="section-onboarding">Onboarding / Offboarding</div>
+        <div class="col-md-4">
+          <label>Onboarding Start</label>
+          <input name="onboarding_start_date" type="date" class="form-control">
+        </div>
+        <div class="col-md-4">
+          <label>Offboarding End</label>
+          <input name="offboarding_end_date" type="date" class="form-control">
+        </div>
+        <div class="col-md-4">
+          <label>Create Onboarding Tasks? <span title="Auto-assign onboarding checklist tasks">❔</span></label>
+          <select name="create_onboarding_tasks" class="form-select">
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </div>
+
+        <!-- SUBMIT -->
+        <div class="col-12 mt-3">
+          <button class="btn btn-success">Create User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleAuthFields() {
+    const authType = document.getElementById("auth_type").value;
+    document.getElementById("passwordField").style.display = authType === "local" ? "block" : "none";
+  }
+
+  function updateManagerDisplay() {
+    const select = document.getElementById("job_title_id");
+    const selectedOption = select.options[select.selectedIndex];
+    const manager = selectedOption.getAttribute("data-manager") || "—";
+    document.getElementById("job_manager").value = manager;
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    toggleAuthFields();
+    updateManagerDisplay();
+  });
+</script>
+{% endblock %}

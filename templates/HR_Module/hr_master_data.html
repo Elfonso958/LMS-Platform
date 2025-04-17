@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- Sidebar -->
+        <div class="col-md-3">
+            <div class="list-group" id="master-tabs">
+                <button class="list-group-item list-group-item-action active" data-table="employment">Employment Types</button>
+                <button class="list-group-item list-group-item-action" data-table="departments">Departments</button>
+                <button class="list-group-item list-group-item-action" data-table="locations">Locations</button>
+                <button class="list-group-item list-group-item-action" data-table="documents">Document Types</button>
+                <button class="list-group-item list-group-item-action" data-table="recruitment_type">Recruitment Types</button>
+            </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="col-md-9">
+            <!-- Employment Types -->
+            <div id="table-employment" class="master-table">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4>Employment Types</h4>
+                    <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addEmploymentModal">+ Add</button>
+                </div>
+                <table class="table table-bordered mt-2">
+                    <thead><tr><th>Name</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        {% for item in employment_types %}
+                        <tr data-id="{{ item.id }}">
+                            <td contenteditable="true" class="editable" data-field="label">{{ item.label }}</td>
+                            <td><button class="btn btn-sm btn-danger delete-btn">🗑</button></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Departments -->
+            <div id="table-departments" class="master-table d-none">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4>Departments</h4>
+                    <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addDepartmentModal">+ Add</button>
+                </div>
+                <table class="table table-bordered mt-2">
+                    <thead><tr><th>Name</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        {% for item in departments %}
+                        <tr data-id="{{ item.id }}">
+                            <td contenteditable="true" class="editable" data-field="name">{{ item.name }}</td>
+                            <td><button class="btn btn-sm btn-danger delete-btn">🗑</button></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Locations -->
+            <div id="table-locations" class="master-table d-none">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4>Locations</h4>
+                    <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addLocationModal">+ Add</button>
+                </div>
+                <table class="table table-bordered mt-2">
+                    <thead><tr><th>Code</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        {% for item in locations %}
+                        <tr data-id="{{ item.id }}">
+                            <td contenteditable="true" class="editable" data-field="name">{{ item.name }}</td>
+                            <td><button class="btn btn-sm btn-danger delete-btn">🗑</button></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Document Types -->
+            <div id="table-documents" class="master-table d-none">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4>Document Types</h4>
+                    <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addDocumentModal">+ Add</button>
+                </div>
+                <table class="table table-bordered mt-2">
+                    <thead><tr><th>Name</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        {% for item in document_types %}
+                        <tr data-id="{{ item.id }}">
+                            <td contenteditable="true" class="editable" data-field="name">{{ item.name }}</td>
+                            <td><button class="btn btn-sm btn-danger delete-btn">🗑</button></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div id="table-recruitment_type" class="master-table d-none">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4>Document Types</h4>
+                    <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#addrecruitmentModal">+ Add</button>
+                </div>
+                <table class="table table-bordered mt-2">
+                    <thead><tr><th>Name</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        {% for rt in recruitment_types %}
+                        <tr data-id="{{ rt.id }}">
+                            <td contenteditable="true" class="editable" data-field="name">{{ rt.label }}</td>
+                            <td><button class="btn btn-sm btn-danger delete-btn">🗑</button></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+{% for table, field, modal_id, label in [
+    ('employment', 'label', 'addEmploymentModal', 'Employment Type'),
+    ('departments', 'name', 'addDepartmentModal', 'Department'),
+    ('locations', 'name', 'addLocationModal', 'Location'),
+    ('documents', 'name', 'addDocumentModal', 'Document Type'),
+    ('recruitment_type', 'label', 'addrecruitmentModal', 'Recruitment Type')
+] %}
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form class="modal-content" method="POST" action="{{ url_for('hr.add_master_item', table=table) }}">
+      <div class="modal-header">
+        <h5 class="modal-title">Add {{ label }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input name="{{ field }}" class="form-control" placeholder="Enter {{ label }}" required>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" type="submit">Add</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+<script>
+// Sidebar tab switching
+const sections = document.querySelectorAll('.master-table');
+document.querySelectorAll('#master-tabs button').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('#master-tabs button').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+        sections.forEach(s => s.classList.add('d-none'));
+        document.getElementById('table-' + this.dataset.table).classList.remove('d-none');
+    });
+});
+
+// Inline updates
+document.querySelectorAll('.editable').forEach(cell => {
+    cell.addEventListener('blur', function () {
+        const row = cell.closest('tr');
+        const id = row.dataset.id;
+        const field = cell.dataset.field;
+        const value = cell.innerText.trim();
+        const table = row.closest('.master-table').id.replace('table-', '');
+
+        fetch(`/update_master_item/${table}/${id}`, {
+            method: "POST",
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ [field]: value })
+        }).then(res => {
+            if (!res.ok) alert("Update failed.");
+        });
+    });
+});
+
+// Delete items
+document.querySelectorAll('.delete-btn').forEach(button => {
+    button.addEventListener('click', function () {
+        const row = this.closest('tr');
+        const id = row.dataset.id;
+        const table = row.closest('.master-table').id.replace('table-', '');
+
+        if (confirm("Delete this item?")) {
+            fetch(`/delete_master_item/${table}/${id}`, {
+                method: "POST"
+            }).then(res => {
+                if (res.ok) row.remove();
+                else alert("Delete failed.");
+            });
+        }
+    });
+});
+</script>
+{% endblock %}

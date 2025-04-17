@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Review Document Uploads{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Pending Document Review Requests</h2>
+
+    <!-- Filter -->
+    <form method="GET" class="row g-3 mb-4">
+        <div class="col-md-4">
+            <label for="filter" class="form-label">Filter by Document Type</label>
+            <select name="filter" id="filter" class="form-select" onchange="this.form.submit()">
+                <option value="">All</option>
+                {% for dtype in document_types %}
+                <option value="{{ dtype.id }}" {% if filter == dtype.id|string %}selected{% endif %}>{{ dtype.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+
+    {% if pending_docs.items %}
+    <table class="table table-bordered table-hover">
+        <thead>
+            <tr>
+                <th>User</th>
+                <th>Document Type</th>
+                <th>Document Date</th>
+                <th>Submitted At</th>
+                <th>File</th>
+                <th style="width: 220px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for doc in pending_docs.items %}
+            <tr>
+                <td>{{ doc.user.username }}</td>
+                <td>{{ doc.type.name }}</td>
+                <td>{{ doc.document_expiry_date.strftime('%Y-%m-%d') }}</td>
+                <td>{{ doc.submitted_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>
+                    <!-- Trigger Thumbnail -->
+                    <img src="{{ url_for('static', filename=doc.file_path) }}" style="max-width: 100px; max-height: 100px; cursor: pointer;" 
+                        data-bs-toggle="modal" data-bs-target="#previewModal{{ doc.id }}" />
+                  </td>             
+                <td>
+                    <form method="POST" action="{{ url_for('document.review_documents') }}">
+                        <input type="hidden" name="doc_id" value="{{ doc.id }}">
+                        <div class="input-group mb-2">
+                            <select name="action" class="form-select" required>
+                                <option value="">Select</option>
+                                <option value="approve">Approve</option>
+                                <option value="reject">Reject</option>
+                            </select>
+                        </div>
+                        <input type="text" name="comment" class="form-control mb-2" placeholder="Optional comment...">
+                        <button class="btn btn-sm btn-primary" type="submit">Submit</button>
+                    </form>
+                    
+                </td>
+            </tr>
+            <!-- Modal for Document Preview -->
+            <div class="modal fade custom-preview-modal" id="previewModal{{ doc.id }}" tabindex="-1" aria-labelledby="previewLabel{{ doc.id }}" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                    <h5 class="modal-title" id="previewLabel{{ doc.id }}">{{ doc.type.name }} - {{ doc.user.username }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                    <img src="{{ url_for('static', filename=doc.file_path) }}" class="img-fluid rounded shadow" alt="Preview">
+                    </div>
+                </div>
+                </div>
+            </div>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Pagination -->
+    <nav>
+        <ul class="pagination">
+            {% if pending_docs.has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('document.review_documents', page=pending_docs.prev_num, filter=filter) }}">&laquo; Prev</a>
+                </li>
+            {% endif %}
+            {% for page_num in pending_docs.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                {% if page_num %}
+                    <li class="page-item {% if pending_docs.page == page_num %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('document.review_documents', page=page_num, filter=filter) }}">{{ page_num }}</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+            {% endfor %}
+            {% if pending_docs.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('document.review_documents', page=pending_docs.next_num, filter=filter) }}">Next &raquo;</a>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% else %}
+        <p>No pending document requests found.</p>
+    {% endif %}
+
+</div>
+<script>
+    lightbox.option({
+      'resizeDuration': 200,
+      'wrapAround': true,
+      'fitImagesInViewport': true,
+      'maxWidth': 1000,
+      'maxHeight': 800,
+      'disableScrolling': true
+    });
+</script>
+    
+    
+{% endblock %}

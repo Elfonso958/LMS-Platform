@@ -4,13 +4,14 @@ from sqlalchemy import Column, Integer, String, ForeignKey, func
 from sqlalchemy import event
 from sqlalchemy.dialects.mysql import BIGINT
 from app.extensions import db
-
+from sqlalchemy.dialects.mysql import BIGINT as MYSQL_BIGINT
 
 # Association Table for User and RoleType (Many-to-Many)
 user_role = db.Table(
     'user_role',
     db.Column('user_id', BIGINT(unsigned=True), db.ForeignKey('user.id'), primary_key=True),
     db.Column('role_type_id', BIGINT(unsigned=True), db.ForeignKey('role_type.roleID'), primary_key=True)
+    
 )
 
 # Association Table for Course and RoleType (Many-to-Many)
@@ -40,6 +41,14 @@ line_training_form_role = db.Table(
     db.Column('line_training_form_id', BIGINT(unsigned=True), db.ForeignKey('line_training_form.id'), primary_key=True),
     db.Column('role_type_id', BIGINT(unsigned=True), db.ForeignKey('role_type.roleID'), primary_key=True)
 )
+
+#Association Table for taskid and job title
+hr_task_template_job_title = db.Table(
+    'hr_task_template_job_title',
+    db.Column('task_template_id', db.Integer, db.ForeignKey('hr_task_template.id'), primary_key=True),
+    db.Column('job_title_id', BIGINT(unsigned=True), db.ForeignKey('job_title.id'), primary_key=True)
+)
+
 
 class RoleType(db.Model):
     __tablename__ = 'role_type'
@@ -81,6 +90,8 @@ class User(UserMixin, db.Model):
     medical_expiry = db.Column(db.Date, nullable=True)  # Medical Expiry Date
     is_active = db.Column(db.Boolean, default=True)  # Field to archive users
     auth_type = db.Column(db.String(20), nullable=False, default='local')
+    onboarding_start_date = db.Column(db.Date)
+    offboarding_end_date = db.Column(db.Date)
 
     # ✅ Many-to-Many Relationship with RoleType
     roles = db.relationship('RoleType', secondary=user_role, back_populates='users')
@@ -624,7 +635,8 @@ class EmailConfig(db.Model):
     course_reminder_days = db.Column(db.String(255), nullable=False, default="60,30,15,10,5,4,3,2,1,0")
     line_training_roles = db.Column(db.String(255), nullable=False, default="")
     course_reminder_email = db.Column(db.String(255), nullable=False, default="")
-
+    medical_expiry_days = db.Column(db.String(255))
+    medical_expiry_email = db.Column(db.String(255), nullable=True)
     def get_line_training_thresholds(self):
         return [int(threshold) for threshold in self.line_training_thresholds.split(",")]
 
@@ -804,3 +816,120 @@ class CrewAcknowledgement(db.Model):
 
     flight = db.relationship("Flight", backref="acknowledgements")
     crew_member = db.relationship("User", backref="crew_acknowledgements")
+
+class DocumentReviewRequest(db.Model):
+    __tablename__ = 'document_review_requests'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(BIGINT(unsigned=True), db.ForeignKey('user.id'), nullable=False)
+    reviewed_by_id = db.Column(BIGINT(unsigned=True), db.ForeignKey('user.id'))
+
+    document_type_id = db.Column(db.Integer, db.ForeignKey('document_types.id'), nullable=False)  # NEW
+    document_expiry_date = db.Column(db.Date, nullable=False)
+    file_path = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(20), default='pending')  # pending / approved / rejected
+    submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
+    reviewed_at = db.Column(db.DateTime)
+    review_comment = db.Column(db.Text)
+
+    # ✅ Explicitly state foreign_keys to resolve ambiguity
+    user = db.relationship('User', foreign_keys=[user_id], backref='document_requests')
+    reviewed_by = db.relationship('User', foreign_keys=[reviewed_by_id], backref='reviewed_documents')
+    type = db.relationship('DocumentType', back_populates='documents')  # NEW
+    def is_pending(self):
+        return self.status == 'pending'
+
+    def is_approved(self):
+        return self.status == 'approved'
+
+class DocumentType(db.Model):
+    __tablename__ = 'document_types'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)  # e.g., 'Medical', 'Passport'
+    description = db.Column(db.String(255), nullable=True)
+
+    # Optional relationship to link to DocumentReviewRequest
+    documents = db.relationship('DocumentReviewRequest', back_populates='type')
+
+    def __repr__(self):
+        return f"<DocumentType {self.name}>"
+
+class HRTaskTemplate(db.Model):
+    __tablename__ = 'hr_task_template'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False)
+    description = db.Column(db.Text)
+    
+    # ✅ One or many job titles
+    assigned_job_titles = db.relationship(
+        "JobTitle",
+        secondary="hr_task_template_job_title",  # association table
+        backref="hr_tasks"
+    )
+    
+    responsible_job_title_id = db.Column(BIGINT(unsigned=True), db.ForeignKey('job_title.id'))
+    responsible_job_title = db.relationship("JobTitle", foreign_keys=[responsible_job_title_id])
+    days_before = db.Column(db.Integer, default=0)  # Days before onboarding/offboarding date
+    timing = db.Column(db.String(20), nullable=False, default="before")  # Options: before, after
+
+    # ✅ Responsible manager (User model)
+    responsible_manager_id = db.Column(BIGINT(unsigned=True), db.ForeignKey('user.id'))
+    responsible_manager = db.relationship("User")
+
+    # ✅ Optional override or contact-specific address
+    responsible_email = db.Column(db.String(150))
+
+    phase = db.Column(db.String(20))  # "onboarding" or "offboarding"
+    is_active = db.Column(db.Boolean, default=True)
+
+
+class UserHRTask(db.Model):
+    __tablename__ = 'user_hr_task'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(BIGINT(unsigned=True), db.ForeignKey('user.id'), nullable=False)
+    task_template_id = db.Column(db.Integer, db.ForeignKey('hr_task_template.id'))
+    status = db.Column(db.String(20), default="Pending")  # Pending / Completed
+    completed_by = db.Column(db.String(150))
+    completed_at = db.Column(db.DateTime)
+    comment = db.Column(db.Text)  # Optional notes
+    due_date = db.Column(db.DateTime, nullable=True)
+
+    user = db.relationship("User", backref="hr_tasks")
+    task_template = db.relationship("HRTaskTemplate", backref="user_tasks")
+
+class Department(db.Model):
+    __tablename__ = 'department'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+
+class EmploymentType(db.Model):
+    __tablename__ = 'employment_type'
+    id = db.Column(db.Integer, primary_key=True)
+    label = db.Column(db.String(100), nullable=False, unique=True)
+
+class RecruitmentRequest(db.Model):
+    __tablename__ = 'recruitment_request'
+    id = db.Column(db.Integer, primary_key=True)
+    hiring_manager_name = db.Column(db.String(100), nullable=False)
+    department_id = db.Column(db.Integer, db.ForeignKey('department.id'))
+    location_id = db.Column(BIGINT(unsigned=True), db.ForeignKey('location.id'))
+    job_title_id = db.Column(BIGINT(unsigned=True), db.ForeignKey('job_title.id'), nullable=False)
+    number_of_positions = db.Column(db.Integer)
+    employment_type_id = db.Column(db.Integer, db.ForeignKey('employment_type.id'))
+    justification = db.Column(db.Text)
+    has_position_description = db.Column(db.Boolean)
+    remuneration_range = db.Column(db.String(100))
+    submitted_by = db.Column(db.String(100))
+
+    department = db.relationship('Department')
+    location = db.relationship('Location')
+    job_title = db.relationship('JobTitle')  # ✅ FK to JobTitle table
+    employment_type = db.relationship('EmploymentType')
+
+class RecruitmentType(db.Model):
+    __tablename__ = 'recruitment_type'
+    id = db.Column(db.Integer, primary_key=True)
+    label = db.Column(db.String(100), unique=True)

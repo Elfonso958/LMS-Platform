@@ -1,0 +1,15 @@
+<p>Hello,</p>
+
+<p>
+  A new HR task has been assigned: <strong>{{ task.name }}</strong> for {{ user.username }}.
+</p>
+
+<ul>
+  <li><strong>Due:</strong> {{ task.due_date.strftime('%A, %d %B') if task.due_date }}</li>
+  <li><strong>Description:</strong> {{ task.description or "No description provided." }}</li>
+</ul>
+
+<p>
+  You can view and complete your assigned tasks here:
+  <a href="{{ url_for('hr.my_tasks', _external=True) }}">My HR Tasks</a>
+</p>

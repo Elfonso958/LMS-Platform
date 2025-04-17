@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}All Approved User Documents{% endblock %}
+{% block content %}
+<div class="container-fluid mt-4">
+  <div class="row">
+    <!-- Sidebar User List -->
+    <div class="col-md-3 border-end" style="height: 80vh; overflow-y: auto;">
+      <h5>Users</h5>
+      <ul class="list-group">
+        {% for uid, data in grouped_docs.items() %}
+          <a class="list-group-item list-group-item-action" href="?selected={{ uid }}">{{ data.user.username }}</a>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <!-- Main Document Panel -->
+    <div class="col-md-9" style="height: 80vh; overflow-y: auto;">
+      {% if selected_id in grouped_docs %}
+        {% set data = grouped_docs[selected_id] %}
+        <div id="user{{ selected_id }}" class="mb-5">
+          <h4>{{ data.user.username }}</h4>
+
+          <!-- ✅ Inline Upload Form -->
+          <form method="POST" action="{{ url_for('document.upload_document_admin') }}" enctype="multipart/form-data" class="mb-3 border p-3 bg-light rounded">
+            <input type="hidden" name="user_id" value="{{ data.user.id }}">
+            <div class="row g-2">
+              <div class="col-md-4">
+                <select name="document_type_id" class="form-select" required>
+                  <option value="" disabled selected>Document Type</option>
+                  {% for dt in document_types %}
+                    <option value="{{ dt.id }}">{{ dt.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-3">
+                <input type="date" name="document_expiry_date" class="form-control" required>
+              </div>
+              <div class="col-md-3">
+                <input type="file" name="file" class="form-control" required>
+              </div>
+              <div class="col-md-2">
+                <button type="submit" class="btn btn-success w-100">Upload</button>
+              </div>
+            </div>
+          </form>
+
+          {% if data.documents %}
+            <ul class="list-group">
+              {% for doc_type, docs in data.documents.items() %}
+                <li class="list-group-item">
+                  <strong>📁 {{ doc_type }}</strong>
+                  <ul class="list-unstyled ms-4 mt-2">
+                    {% for doc in docs %}
+                      <li class="mb-2">
+                        📄 <a href="{{ url_for('static', filename=doc.file_path) }}" target="_blank">
+                          {{ doc.type.name }} - {{ doc.document_expiry_date.strftime('%Y-%m-%d') }}
+                        </a>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p>No approved documents.</p>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

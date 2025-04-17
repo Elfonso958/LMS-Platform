@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <p>Hi {{ user.username }},</p>
+
+    <p>Your document <strong>{{ document.type.name }}</strong> (submitted on {{ document.submitted_at.strftime('%Y-%m-%d') }}) has been <strong>rejected</strong>.</p>
+
+    {% if document.review_comment %}
+    <p><strong>Reviewer comment:</strong><br>{{ document.review_comment }}</p>
+    {% endif %}
+
+    <p>Please <a href="{{ upload_url }}">click here to upload a new document</a> or visit the LMS platform.</p>
+
+    <p>Regards,<br>Training</p>
+  </body>
+</html>

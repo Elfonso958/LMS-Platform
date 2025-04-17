@@ -310,13 +310,13 @@ def roles_required(*roles):
         def decorated_function(*args, **kwargs):
             if not current_user.is_authenticated:
                 flash("You need to be logged in to access this page.", "danger")
-                return redirect(url_for('login'))
+                return redirect(url_for('auth.login'))
             
             user_roles = [role.role_name for role in current_user.roles]
 
             if not any(role in user_roles for role in roles):
                 flash("You do not have permission to access this page.", "danger")
-                return redirect(url_for('user_dashboard'))
+                return redirect(url_for('user.user_dashboard'))
             
             return f(*args, **kwargs)
         return decorated_function
@@ -361,3 +361,21 @@ def normalize_crew_list(crew_list):
             formatted_crew.append(list(c))  # Convert tuples to lists
 
     return sorted(formatted_crew, key=lambda x: x[0])  # Sort by employeeId
+
+def generate_nonce():
+    """Generate a unique nonce for authentication requests."""
+    return os.urandom(16).hex()
+
+def save_uploaded_document(file_storage, username, doc_type_name, expiry_date):
+    safe_username = username.replace(" ", "_")
+    safe_doc_type = doc_type_name.replace(" ", "_")
+    safe_filename = f"{safe_doc_type}-{safe_username}-{expiry_date}.pdf".replace(" ", "_")
+
+    user_folder = os.path.join(current_app.static_folder, "uploads", safe_username, safe_doc_type)
+    os.makedirs(user_folder, exist_ok=True)
+
+    full_path = os.path.join(user_folder, safe_filename)
+    file_storage.save(full_path)
+
+    relative_path = os.path.relpath(full_path, current_app.static_folder).replace("\\", "/")
+    return relative_path

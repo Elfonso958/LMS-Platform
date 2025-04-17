@@ -1,6 +1,7 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SelectMultipleField, SubmitField, TextAreaField, DateField, FloatField
+from wtforms import StringField, PasswordField, SelectMultipleField, SubmitField, TextAreaField, DateField, FloatField, SelectField, FileField
 from wtforms.validators import DataRequired, Email
+from flask_wtf.file import FileAllowed
 
 class LoginForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
@@ -48,3 +49,40 @@ CREW_CHECK_FIELDS = [
     ('examiner_name', 'Examiner Name'),
     ('examiner_licence_number', 'Examiner Licence Number'),
 ]
+
+class MedicalExpiryEmailConfigForm(FlaskForm):
+    medical_expiry_days = StringField('Medical Expiry Reminder Days', validators=[DataRequired()])
+    medical_expiry_email = StringField('Medical Expiry Email', validators=[DataRequired(), Email()])
+    submit = SubmitField('Update Medical Expiry Configuration')
+
+class FormUpload(FlaskForm):
+    document_type = SelectField(
+        'Document Type',
+        choices=[
+            ('medical', 'Medical Certificate'),
+            ('passport', 'Passport'),
+            ('license', 'License'),
+            ('other', 'Other')
+        ],
+        validators=[DataRequired()]
+    )
+    document_expiry_date = DateField('Document Expiry or Issue Date', validators=[DataRequired()])
+    file = FileField(
+        'Upload Document',
+        validators=[
+            DataRequired(),
+            FileAllowed(['pdf', 'jpg', 'jpeg', 'png'], 'Only PDF or image files are allowed')
+        ]
+    )
+    submit = SubmitField('Submit for Review')
+
+class DocumentTypeForm(FlaskForm):
+    name = StringField("Document Type Name", validators=[DataRequired()])
+    submit = SubmitField("Add Document Type")
+
+class DirectDocumentUploadForm(FlaskForm):
+    user_id = SelectField("User", coerce=int, validators=[DataRequired()])
+    document_type = SelectField("Document Type", coerce=int, validators=[DataRequired()])
+    document_expiry_date = DateField("Expiry Date", validators=[DataRequired()])
+    file = FileField("Upload File", validators=[DataRequired(), FileAllowed(['pdf', 'png', 'jpg', 'jpeg'])])
+    submit = SubmitField("Upload Document")

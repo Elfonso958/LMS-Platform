@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2>My Assigned HR Tasks</h2>
+
+  {% if tasks %}
+  <table class="table table-bordered mt-3">
+    <thead>
+      <tr>
+        <th>User</th>
+        <th>Task</th>
+        <th>Phase</th>
+        <th>Status</th>
+        <th>Due Date</th>
+        <th>Completed At</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for task in tasks %}
+      <tr>
+        <td>{{ task.user.username }}</td>
+        <td>
+          {{ task.task_template.name }}
+          <a href="#" 
+             class="ms-2 text-info"
+             title="View Description"
+             data-bs-toggle="modal" 
+             data-bs-target="#descriptionModal"
+             data-description="{{ task.task_template.description|e }}">
+            🛈
+          </a>
+        </td>
+        
+        
+        <td>{{ task.task_template.phase.capitalize() }}</td>
+        <td>
+          {% if task.status == 'Completed' %}
+            <span class="badge bg-success">{{ task.status }}</span>
+          {% else %}
+            <span class="badge bg-warning text-dark">{{ task.status }}</span>
+          {% endif %}
+        </td>
+        <td>{{ task.due_date|human_date if task.due_date else '—' }}</td>
+        <td>{{ task.completed_at|human_date if task.completed_at else '—' }}</td>
+        <td>
+          {% if task.status != 'Completed' %}
+          <button 
+          class="btn btn-sm btn-success"
+          data-bs-toggle="modal"
+          data-bs-target="#signOffModal"
+          data-userid="{{ task.user_id }}"
+          data-templateid="{{ task.task_template.id }}"
+          data-taskname="{{ task.task_template.name }}"
+          data-description="{{ task.task_template.description|e }}"
+        >
+          Sign Off
+        </button>
+          {% else %}
+            {{ task.comment or "—" }}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="alert alert-info">You currently have no assigned HR tasks.</div>
+  {% endif %}
+</div>
+
+<!-- Sign-Off Modal -->
+<div class="modal fade" id="signOffModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="POST" action="{{ url_for('hr.sign_off_task_post') }}" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Sign Off Task</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="user_id" id="modalUserId">
+        <input type="hidden" name="task_template_id" id="modalTemplateId">
+        <div class="mb-3">
+          <label class="form-label">Task</label>
+          <input type="text" class="form-control" id="modalTaskName" readonly>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <textarea class="form-control" id="modalTaskDescription" rows="3" readonly></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Comment</label>
+          <textarea name="comment" class="form-control" rows="3" required></textarea>
+        </div>
+        <input type="hidden" name="completed_by" value="{{ current_user.username }}">
+      </div>
+      <div class="modal-footer">
+        <button type="submit" class="btn btn-success">Submit</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+<!-- Description Modal -->
+<div class="modal fade" id="descriptionModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Task Description</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="modalDescriptionText" class="mb-0 text-muted">No description provided.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const modal = document.getElementById('signOffModal');
+  modal.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    document.getElementById('modalUserId').value = button.getAttribute('data-userid');
+    document.getElementById('modalTemplateId').value = button.getAttribute('data-templateid');
+    document.getElementById('modalTaskName').value = button.getAttribute('data-taskname');
+    document.getElementById('modalTaskDescription').value = button.getAttribute('data-description') || "—";
+  });
+  const descriptionModal = document.getElementById('descriptionModal');
+  descriptionModal.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    const description = button.getAttribute('data-description') || "No description provided.";
+    document.getElementById('modalDescriptionText').innerText = description;
+  });
+</script>
+
+{% endblock %}

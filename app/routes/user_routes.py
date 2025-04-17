@@ -19,8 +19,8 @@ from flask import render_template, redirect, url_for, flash, request, current_ap
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager, login_user, logout_user, login_required,current_user,UserMixin
 from app import create_app, db, mail
-from app.models import Course, RoleType, UserSlideProgress, UserExamAttempt, Questions, Answers, UserAnswer, course_role, User, db, PayrollInformation, CrewCheck, CrewCheckMeta, CheckItem, user_role,CheckItemGrade, LineTrainingForm, Location, Port, HandlerFlightMap, GroundHandler, CrewAcknowledgement
-from app.models import Task,TaskCompletion,Topic, LineTrainingItem,UserLineTrainingForm, Sector, RosterChange, Flight, FormTemplate,RoutePermission,Qualification,EmployeeSkill, EmailConfig, JobTitle, Timesheet, Location, PayrollPeriod,PayrollInformation, NavItem, NavItemPermission # Import your models and database session
+from app.models import Course, RoleType, UserSlideProgress, UserExamAttempt, Questions, Answers, UserAnswer, course_role, User, db, PayrollInformation, CrewCheck, CrewCheckMeta, CheckItem, user_role,CheckItemGrade, LineTrainingForm, Location, Port, HandlerFlightMap, GroundHandler, CrewAcknowledgement, DocumentType
+from app.models import Task,TaskCompletion,Topic, LineTrainingItem,UserLineTrainingForm, Sector, RosterChange, Flight, FormTemplate,RoutePermission,Qualification,EmployeeSkill, EmailConfig, JobTitle, Timesheet, Location, PayrollPeriod,PayrollInformation, NavItem, NavItemPermission, DocumentReviewRequest # Import your models and database session
 from app.utils import extract_slides_to_png, calculate_exam_score, get_slide_count, admin_required, natural_sort_key, roles_required, generate_certificate
 from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
@@ -42,7 +42,7 @@ from fpdf import FPDF
 from sqlalchemy import func
 from sqlalchemy import text, bindparam
 from cachetools import TTLCache
-from app.forms import CREW_CHECK_FIELDS
+from app.forms import CREW_CHECK_FIELDS, FormUpload
 from collections import defaultdict
 
 user_bp = Blueprint("user", __name__)
@@ -301,20 +301,6 @@ def user_profile():
         locations=locations
     )
 
-@user_bp.route('/my_exam_attempts', methods=['GET'])
-@login_required
-def my_exam_attempts():
-    # Fetch all exam attempts for the logged-in user
-    attempts = UserExamAttempt.query.filter_by(user_id=current_user.id).all()
-
-    # Include related course data for better context
-    for attempt in attempts:
-        attempt.course = Course.query.get(attempt.course_id)
-
-    return render_template(
-        'user/my_exam_attempts.html',
-        attempts=attempts
-    )
 
 ######################
 ###User Crew Checks###
@@ -326,3 +312,4 @@ def my_crew_checks():
     completed_checks = CrewCheckMeta.query.filter_by(candidate_id=current_user.id, is_complete=True).order_by(CrewCheckMeta.date_of_test.desc()).all()
 
     return render_template('user/my_checks.html', crew_checks_meta=completed_checks)
+

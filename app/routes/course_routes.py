@@ -773,7 +773,7 @@ def delete_exam_attempt(attempt_id):
         db.session.rollback()
         flash(f'Error deleting exam attempt: {e}', 'danger')
 
-    return redirect(url_for('view_exam_attempts', course_id=course_id))
+    return redirect(url_for('course.view_exam_attempts', course_id=course_id))
 
 @course_bp.route('/course/<int:course_id>/completed', methods=['GET'])
 @login_required
@@ -785,7 +785,7 @@ def view_completed_users(course_id):
     # Ensure the course doesn't have an exam
     if course.has_exam:
         flash("This course has exams. Please use the 'Attempts' button instead.", "danger")
-        return redirect(url_for('manage_courses'))
+        return redirect(url_for('course.manage_courses'))
 
     # Fetch users who have completed the course
     completions = (

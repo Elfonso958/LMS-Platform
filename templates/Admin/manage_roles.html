@@ -15,7 +15,7 @@
     </div>
 
     <!-- Form to add a new role -->
-    <form method="POST" action="{{ url_for('manage_roles') }}">
+    <form method="POST" action="{{ url_for('admin.manage_roles') }}">
         <div class="form-group">
             <label for="role_name">Role Name</label>
             <input type="text" class="form-control" id="role_name" name="role_name" required>
@@ -43,7 +43,7 @@
                 <td>{{ role.role_name }}</td>
                 <td>{{ role.role_description }}</td>
                 <td>
-                    <form method="POST" action="{{ url_for('manage_roles') }}" style="display:inline;">
+                    <form method="POST" action="{{ url_for('admin.manage_roles') }}" style="display:inline;">
                         <input type="hidden" name="role_id" value="{{ role.roleID }}">
                         <button type="submit" name="delete_role" class="btn btn-danger btn-sm">Delete</button>
                     </form>
@@ -76,7 +76,7 @@ $(document).ready(function(){
   $('#fetch-roles-btn').click(function() {
     $('#loading-bar').show();
     $.ajax({
-      url: "{{ url_for('run_fetch_roles') }}",
+      url: "{{ url_for('admin.run_fetch_roles') }}",
       method: 'GET',
       success: function(response) {
         $('#loading-bar').hide();

@@ -89,6 +89,11 @@ def login():
                 current_app.logger.info(f"Password match successful for User ID={user.id}")
                 login_user(user, remember=True)
                 session.permanent = True
+                required_fields = [user.phone_number, user.address, user.next_of_kin, user.kin_phone_number, user.date_of_birth]
+                if not all(required_fields):
+                    flash("Welcome! Please complete your profile before continuing.", "warning")
+                    return redirect(url_for("user.user_profile"))
+                
                 flash("Login successful!", "success")
                 return redirect(url_for("user.user_dashboard"))
             else:
@@ -119,6 +124,11 @@ def login():
                 session['auth_token'] = token
                 login_user(user, remember=True)
                 session.permanent = True
+                required_fields = [user.phone_number, user.address, user.next_of_kin, user.kin_phone_number, user.date_of_birth]
+                if not all(required_fields):
+                    flash("Welcome! Please complete your profile before continuing.", "warning")
+                    return redirect(url_for("user.user_profile"))
+                
                 flash("Login successful via Envision!", "success")
                 fetch_and_assign_user_roles(user)
                 return redirect(url_for("user.user_dashboard"))
@@ -140,4 +150,5 @@ def login():
 def logout():
     logout_user()
     flash('You have been logged out.', 'info')
-    return redirect(url_for('user.user_dashboard'))
+    return redirect(url_for('auth.login'))
+

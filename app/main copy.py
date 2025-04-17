@@ -303,14 +303,14 @@ def archive_user(user_id):
     """Marks a user as archived (inactive) instead of deleting them."""
     if not current_user.is_admin:
         flash("You do not have permission to archive users.", "danger")
-        return redirect(url_for('manage_users'))
+        return redirect(url_for('admin.manage_users'))
 
     user = User.query.get_or_404(user_id)
     user.is_active = False  # 🔹 Archive user
     db.session.commit()
 
     flash(f"User {user.username} has been archived.", "info")
-    return redirect(url_for('manage_users'))
+    return redirect(url_for('admin.manage_users'))
 
 @app.route('/reinstate_user/<int:user_id>', methods=['POST'])
 @login_required
@@ -318,14 +318,14 @@ def reinstate_user(user_id):
     """Restores an archived user to active status."""
     if not current_user.is_admin:
         flash("You do not have permission to reinstate users.", "danger")
-        return redirect(url_for('manage_users'))
+        return redirect(url_for('admin.manage_users'))
 
     user = User.query.get_or_404(user_id)
     user.is_active = True  # 🔹 Restore user
     db.session.commit()
 
     flash(f"User {user.username} has been reinstated.", "success")
-    return redirect(url_for('manage_users'))
+    return redirect(url_for('admin.manage_users'))
 
 # Admin Dashboard Route
 @app.route('/admin_dashboard')
@@ -336,9 +336,9 @@ def admin_dashboard():
         return redirect(url_for('user_dashboard'))
 
     admin_tools = [
-        {"name": "User Management", "url": url_for('manage_users')},
-        {"name": "Course Management", "url": url_for('manage_courses')},
-        {"name": "Role Management", "url": url_for('manage_roles')},
+        {"name": "User Management", "url": url_for('admin.manage_users')},
+        {"name": "Course Management", "url": url_for('admin.manage_courses')},
+        {"name": "Role Management", "url": url_for('admin.manage_roles')},
         #{"name": "Exam Attempts", "url": url_for('view_exam_attempts')},
         # Add more admin tools as needed
     ]
@@ -370,7 +370,7 @@ def manage_users():
         # Check if email already exists
         if User.query.filter_by(email=email).first():
             flash('Email already exists.', 'danger')
-            return redirect(url_for('manage_users'))
+            return redirect(url_for('admin.manage_users'))
 
         crew_code = request.form.get('crew_code')
 
@@ -417,7 +417,7 @@ def manage_users():
             db.session.rollback()
             flash(f"An error occurred: {str(e)}", 'danger')
 
-        return redirect(url_for('manage_users'))
+        return redirect(url_for('admin.manage_users'))
 
     # Retrieve filter criteria for searching users
     name_filter = request.args.get('name_filter', '').strip()
@@ -860,7 +860,7 @@ def start_course_again(course_id):
 def delete_user(user_id):
     if not current_user.is_admin:
         flash("You do not have permission to perform this action.", "danger")
-        return redirect(url_for('manage_users'))
+        return redirect(url_for('admin.manage_users'))
 
     user = User.query.get_or_404(user_id)
 
@@ -876,7 +876,7 @@ def delete_user(user_id):
         db.session.rollback()
         flash(f"An error occurred while deleting the user: {str(e)}", "danger")
 
-    return redirect(url_for('manage_users'))
+    return redirect(url_for('admin.manage_users'))
 
 @app.route('/manage_courses', methods=['GET', 'POST'])
 @login_required
@@ -899,7 +899,7 @@ def manage_courses():
         # Validate required fields
         if not title or not description or not role_type_ids or not ppt_file or passing_mark is None:
             flash('All fields, including Passing Mark, are required.', 'danger')
-            return redirect(url_for('manage_courses'))
+            return redirect(url_for('admin.manage_courses'))
 
         # Save the uploaded PowerPoint file
         ppt_filename = secure_filename(ppt_file.filename)
@@ -926,7 +926,7 @@ def manage_courses():
         db.session.commit()
 
         flash(f'Course "{title}" created successfully.', 'success')
-        return redirect(url_for('manage_courses'))
+        return redirect(url_for('admin.manage_courses'))
 
     # Fetch existing courses and roles for display
     courses = Course.query.all()
@@ -969,7 +969,7 @@ def edit_course(course_id):
 
         db.session.commit()
         flash(f'Course "{title}" updated successfully.', 'success')
-        return redirect(url_for('manage_courses'))
+        return redirect(url_for('admin.manage_courses'))
 
     # Fetch roles for the form
     roles = RoleType.query.all()
@@ -1066,7 +1066,7 @@ def delete_course(course_id):
             shutil.rmtree(slides_folder)  # Attempt to remove the directory
         except Exception as e:
             flash(f"Permission error: Unable to delete slides folder. {e}", 'danger')
-            return redirect(url_for('manage_courses'))
+            return redirect(url_for('admin.manage_courses'))
 
     # Correct the PowerPoint file path
     ppt_path = os.path.join(current_app.root_path, 'static', 'Course_Powerpoints', course.ppt_file)
@@ -1075,7 +1075,7 @@ def delete_course(course_id):
             os.remove(ppt_path)
         except Exception as e:
             flash(f"Permission error: Unable to delete PowerPoint file. {e}", 'danger')
-            return redirect(url_for('manage_courses'))
+            return redirect(url_for('admin.manage_courses'))
 
     # Delete associated course data
     try:
@@ -1096,10 +1096,10 @@ def delete_course(course_id):
         db.session.commit()
     except Exception as e:
         flash(f"Error deleting course data: {e}", 'danger')
-        return redirect(url_for('manage_courses'))
+        return redirect(url_for('admin.manage_courses'))
 
     flash(f'Course "{course.title}" and all associated data deleted successfully.', 'success')
-    return redirect(url_for('manage_courses'))
+    return redirect(url_for('admin.manage_courses'))
     
 @app.route('/manage_roles', methods=['GET', 'POST'])
 @login_required
@@ -1662,7 +1662,7 @@ def view_completed_users(course_id):
     # Ensure the course doesn't have an exam
     if course.has_exam:
         flash("This course has exams. Please use the 'Attempts' button instead.", "danger")
-        return redirect(url_for('manage_courses'))
+        return redirect(url_for('admin.manage_courses'))
 
     # Fetch users who have completed the course
     completions = (
@@ -4059,7 +4059,7 @@ def assign_lms_role():
 
     if not user or not role:
         flash('Invalid user or role.', 'danger')
-        return redirect(url_for('manage_users'))
+        return redirect(url_for('admin.manage_users'))
 
     if role not in user.roles:
         user.roles.append(role)
@@ -4068,7 +4068,7 @@ def assign_lms_role():
     else:
         flash(f'User "{user.username}" already has the role "{role.role_name}".', 'info')
 
-    return redirect(url_for('manage_users'))
+    return redirect(url_for('admin.manage_users'))
 
 @login_manager.user_loader
 def load_user(user_id):

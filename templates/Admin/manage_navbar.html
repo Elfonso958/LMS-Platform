@@ -146,7 +146,12 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Endpoint (optional)</label>
-                            <input type="text" name="endpoint" id="nav-endpoint" class="form-control">
+                            <select name="endpoint" id="nav-endpoint" class="form-select">
+                                <option value="">— No endpoint —</option>
+                                {% for ep in available_endpoints %}
+                                    <option value="{{ ep }}">{{ ep }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Parent (for child links)</label>

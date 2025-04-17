@@ -1,12 +1,12 @@
 from sqlalchemy.orm import joinedload
 from flask_mail import Message
 from app.models import Course, RoleType, UserSlideProgress, UserExamAttempt, Questions, Answers, UserAnswer, course_role, User, db, PayrollInformation, CrewCheck, CrewCheckMeta, CheckItem, user_role, CheckItemGrade, LineTrainingForm, Task, TaskCompletion, Topic, LineTrainingItem, UserLineTrainingForm, Sector, Qualification, EmailConfig
-from app import create_app, db, mail
+from app import db, mail
 from threading import Thread
 import textwrap
 from datetime import datetime, timedelta
 import pdfkit
-from flask import render_template
+from flask import render_template, current_app
 import json
 
 
@@ -314,6 +314,7 @@ def Send_Release_To_Supervisor_Email(app, candidate, form_name, form_id, total_h
 
 
 def send_course_reminders():
+    from app import create_app
     """Send course expiry reminders daily, but exclude users who no longer require the course."""
     app = create_app()
     
@@ -479,6 +480,7 @@ def send_qualification_expiry_email(user, qualification, days_to_expiry, formatt
     return subject, body
 
 def send_qualification_reminders():
+    from app import create_app
     """Send qualification expiry reminders daily."""
     app = create_app()
     
@@ -689,3 +691,43 @@ def send_timesheet_response(to, app, subject, body):
 
     except Exception as e:
         print(f"Error sending email to {to}: {e}")
+
+def send_email(subject, recipients, body=None, html=None, cc=None, attachments=None):
+    """
+    Send an email (HTML or plain text) optionally with CC and attachments.
+    """
+    app = current_app._get_current_object()  # ✅ Get actual Flask app object
+
+    def send_message():
+        with app.app_context():  # ✅ Use actual app object, not current_app
+            msg = Message(
+                subject=subject,
+                recipients=recipients,
+                cc=cc or [],
+                sender=app.config['MAIL_DEFAULT_SENDER']
+            )
+            if html:
+                msg.html = html
+            elif body:
+                msg.body = body
+            else:
+                raise ValueError("Either 'html' or 'body' must be provided for email content.")
+
+            if attachments:
+                for filename, mimetype, data in attachments:
+                    msg.attach(filename, mimetype, data)
+
+            mail.send(msg)
+
+    Thread(target=send_message).start()
+
+def send_hr_task_email(task, user, subject="New HR Task Assigned", template='emails/hr_task_assigned.html'):
+    if not task.responsible_email:
+        return
+
+    msg = Message(
+        subject=subject,
+        recipients=[task.responsible_email],
+        html=render_template(template, task=task, user=user)
+    )
+    mail.send(msg)

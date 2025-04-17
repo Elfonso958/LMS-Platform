@@ -51,8 +51,13 @@ ENVISION_AUTH_URL = "https://envision.airchathams.co.nz:8790/v1/Authenticate"
 
 @crew_checks_bp.route('/crew_checks_dashboard')
 @login_required
-@roles_required("Training Team", "SF34 Examiner", "ATR72 Examiner")
 def crew_checks_dashboard():
+    required_roles = {'Training Team', 'SF34 Examiner', 'ATR72 Examiner'}
+    user_roles = {role.role_name for role in current_user.roles}
+
+    if not current_user.is_admin and not required_roles.intersection(user_roles):
+        flash("You do not have permission to access this page.", "danger")
+        return redirect(url_for('user_dashboard'))
     # Debug: Print the current user's roles
     user_roles = [role.role_name for role in current_user.roles]
     # Fetch all crew checks from the database
@@ -607,7 +612,6 @@ def verify_sign_password():
 ###############################################
 @crew_checks_bp.route('/checks')
 @login_required
-@roles_required('Training Team', 'SF34 Examiner', 'ATR72 Examiner')
 def checks():
     status_filter = request.args.get('status', 'all')
     aircraft_filter = request.args.get('aircraft', 'all')
@@ -615,6 +619,8 @@ def checks():
     type_of_check_filter = request.args.get('type_of_check', 'all')
     sort_by = request.args.get('sort_by', 'date_of_test')
     order = request.args.get('order', 'asc')
+    required_roles = {'Training Team', 'SF34 Examiner', 'ATR72 Examiner'}
+    user_roles = {role.role_name for role in current_user.roles}
 
     # Fetch all candidates
     all_candidates = User.query.all()
@@ -655,6 +661,10 @@ def checks():
         filtered_checks.sort(key=lambda x: x.is_complete, reverse=reverse)
     elif sort_by == 'next_check_due':
         filtered_checks.sort(key=lambda x: x.next_check_due, reverse=reverse)
+
+    if not current_user.is_admin and not required_roles.intersection(user_roles):
+        flash("You do not have permission to access this page.", "danger")
+        return redirect(url_for('user_dashboard'))
 
     return render_template(
         'crew_checks/checks.html',
