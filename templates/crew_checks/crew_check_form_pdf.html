@@ -4,151 +4,166 @@
   <meta charset="UTF-8">
   <title>{{ crew_check_meta.check.name if crew_check_meta.check else "Crew Check Form" }}</title>
   <style>
+    /* Base */
     body {
       font-family: Arial, sans-serif;
       font-size: 14px;
-      line-height: 1.6;
+      line-height: 1.5;
       margin: 20px;
       color: #333;
     }
+    h1, h2, h3 {
+      margin: 0 0 10px;
+      color: #2d6a4f;
+    }
+    /* Header */
     .header {
       text-align: center;
       margin-bottom: 20px;
-      padding: 10px;
+      padding-bottom: 10px;
       border-bottom: 2px solid #2d6a4f;
     }
     .header h1 {
-      margin: 0;
       font-size: 24px;
-      color: #2d6a4f;
+      font-weight: bold;
     }
 
-    /* --- PDF-SAFE COLUMN LAYOUT --- */
+    /* Info columns */
     .info-container {
       display: table;
       width: 100%;
+      table-layout: fixed;
       margin-bottom: 20px;
     }
     .info-column {
       display: table-cell;
-      width: 33%;
-      background: #f1f1f1;
       padding: 10px;
-      border-radius: 5px;
       vertical-align: top;
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .info-column + .info-column {
+      margin-left: 10px;
     }
     .info-column p {
       margin: 5px 0;
     }
 
-    .section {
-      margin-bottom: 20px;
-    }
+    /* Section Titles */
     .section h2 {
       font-size: 18px;
       border-bottom: 2px solid #2d6a4f;
-      margin-bottom: 10px;
       padding-bottom: 5px;
-      color: #2d6a4f;
+      margin-bottom: 10px;
+    }
+    .section h3 {
+      font-size: 16px;
+      margin-top: 15px;
     }
 
-    /* --- PDF-FRIENDLY ASSESSMENT TABLE --- */
+    /* Assessment Table */
     .assessment-container {
       width: 100%;
       border-collapse: collapse;
-      border: 1px solid #ccc;
-      background: #f8f9fa;
       margin-bottom: 20px;
     }
-    .assessment-container th, .assessment-container td {
+    .assessment-container th,
+    .assessment-container td {
       border: 1px solid #ccc;
-      padding: 6px;
+      padding: 8px;
       text-align: left;
     }
     .assessment-container th {
       background: #2d6a4f;
-      color: white;
+      color: #fff;
+      font-weight: bold;
     }
+    /* Set fixed widths for columns */
+    .assessment-container th:nth-child(1),
+    .assessment-container td:nth-child(1) {
+      width: 60%;
+    }
+    .assessment-container th:nth-child(2),
+    .assessment-container td:nth-child(2) {
+      width: 40%;
+      text-align: center;
+    }
+    /* Zebra striping */
+    .assessment-container tbody tr:nth-child(even) {
+      background: #f8f9fa;
+    }
+
+    /* Radio Group Styling */
     .radio-group {
-      display: inline-block;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
     }
     .radio-group label {
-      margin-right: 5px;
+      flex: 1;
+      text-align: center;
+      font-weight: normal;
+      margin: 0;
+      padding: 4px 2px;
+    }
+    .radio-group input {
+      margin-right: 4px;
     }
 
-    /* --- PDF-SAFE ADDITIONAL INFO SECTION --- */
-    .additional-info {
-      width: 100%;
-      margin-bottom: 20px;
-    }
-    .additional-info h3 {
-      font-size: 16px;
-      color: #2d6a4f;
-      margin-bottom: 5px;
-    }
-    .info-container {
-      display: table;
-      width: 100%;
-    }
-    .info-column {
-      display: table-cell;
-      width: 33%;
-      padding: 10px;
-      vertical-align: top;
-    }
-    .info-column p {
-      margin: 5px 0;
+    /* Additional Info */
+    .additional-info p {
+      margin: 8px 0;
     }
 
-    /* --- FORCE PAGE BREAK FOR PDF --- */
+    /* Page Break for PDF */
     @media print {
       .page-break { page-break-before: always; }
     }
   </style>
 </head>
 <body>
-  <!-- Header -->
   <div class="header">
     <h1>{{ crew_check_meta.check.name if crew_check_meta.check else "Crew Check Form" }}</h1>
   </div>
 
-  <!-- Candidate & Check Details (Fixed for PDF) -->
+  <!-- Candidate & Check Details -->
   <div class="section">
     <div class="info-container">
       <div class="info-column">
         {% if 'candidate_name' in visible_fields %}
-        <p><strong>Candidate Name:</strong> {{ crew_check_meta.candidate.username if crew_check_meta.candidate else "Unknown" }}</p>
+          <p><strong>Candidate Name:</strong> {{ crew_check_meta.candidate.username if crew_check_meta.candidate else "Unknown" }}</p>
         {% endif %}
         {% if 'licence_type' in visible_fields %}
-        <p><strong>Licence Type:</strong> {{ crew_check_meta.candidate.license_type or "Not Provided" }}</p>
+          <p><strong>Licence Type:</strong> {{ crew_check_meta.candidate.license_type or "Not Provided" }}</p>
         {% endif %}
         {% if 'licence_number' in visible_fields %}
-        <p><strong>Licence Number:</strong> {{ crew_check_meta.candidate.license_number or "Not Provided" }}</p>
+          <p><strong>Licence Number:</strong> {{ crew_check_meta.candidate.license_number or "Not Provided" }}</p>
         {% endif %}
       </div>
       <div class="info-column">
         {% if 'medical_expiry' in visible_fields %}
-        <p><strong>Medical Expiry:</strong> {{ crew_check_meta.candidate.medical_expiry.strftime('%Y-%m-%d') if crew_check_meta.candidate and crew_check_meta.candidate.medical_expiry else "Not Provided" }}</p>
+          <p><strong>Medical Expiry:</strong> {{ crew_check_meta.candidate.medical_expiry.strftime('%Y-%m-%d') if crew_check_meta.candidate and crew_check_meta.candidate.medical_expiry else "Not Provided" }}</p>
         {% endif %}
         {% if 'date_of_test' in visible_fields %}
-        <p><strong>Date of Test:</strong> {{ crew_check_meta.date_of_test.strftime('%Y-%m-%d') if crew_check_meta.date_of_test else "Unknown" }}</p>
+          <p><strong>Date of Test:</strong> {{ crew_check_meta.date_of_test.strftime('%Y-%m-%d') if crew_check_meta.date_of_test else "Unknown" }}</p>
         {% endif %}
-        {% if 'check_type' in visible_fields %}
-        <p><strong>Aircraft Type:</strong> {{ crew_check_meta.aircraft_type or "Unknown" }}</p>
+        {% if 'aircraft_type' in visible_fields %}
+          <p><strong>Aircraft Type:</strong> {{ crew_check_meta.aircraft_type or "Unknown" }}</p>
         {% endif %}
       </div>
       <div class="info-column">
         {% if 'aircraft_registration' in visible_fields %}
-        <p><strong>Aircraft Registration:</strong> {{ crew_check_meta.aircraft_registration or "Unknown" }}</p>
+          <p><strong>Aircraft Registration:</strong> {{ crew_check_meta.aircraft_registration or "Unknown" }}</p>
         {% endif %}
-        {% if 'check_type' in visible_fields %}
-        <p><strong>Type of Check:</strong> {{ crew_check_meta.type_of_check or "Not Specified" }}</p>
+        {% if 'type_of_check' in visible_fields %}
+          <p><strong>Type of Check:</strong> {{ crew_check_meta.type_of_check or "Not Specified" }}</p>
         {% endif %}
       </div>
     </div>
   </div>
 
-  <!-- Assessment Criteria (Improved for PDF) -->
+  <!-- Assessment Criteria -->
   <div class="section">
     <h2>Assessment Criteria</h2>
     <table class="assessment-container">
@@ -162,13 +177,15 @@
         {% for item in crew_check_meta.check.items %}
         <tr>
           <td><strong>{{ item.item_name }}</strong></td>
-          <td class="radio-group">
-            {% set grade_obj = item.grades | selectattr("crew_check_meta_id", "equalto", crew_check_meta.id) | list | first %}
-            {% set selected = grade_obj.grade if grade_obj and grade_obj.grade is not none else "NA" %}
-            {% for option in range(1,6) %}
-              <label><input type="radio" name="item_{{ item.id }}" value="{{ option }}" disabled {% if selected|string == option|string %}checked{% endif %}> {{ option }}</label>
-            {% endfor %}
-            <label><input type="radio" name="item_{{ item.id }}" value="NA" disabled {% if selected|string == "NA" %}checked{% endif %}> NA</label>
+          <td>
+            <div class="radio-group">
+              {% set grade_obj = item.grades | selectattr("crew_check_meta_id", "equalto", crew_check_meta.id) | list | first %}
+              {% set selected = grade_obj.grade if grade_obj and grade_obj.grade is not none else "NA" %}
+              {% for option in range(1,6) %}
+                <label><input type="radio" name="item_{{ item.id }}" value="{{ option }}" disabled {% if selected|string == option|string %}checked{% endif %}>{{ option }}</label>
+              {% endfor %}
+              <label><input type="radio" name="item_{{ item.id }}" value="NA" disabled {% if selected|string == "NA" %}checked{% endif %}>NA</label>
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -176,19 +193,16 @@
     </table>
   </div>
 
-  <!-- Page Break for PDF -->
   <div class="page-break"></div>
 
   <!-- Additional Information -->
   <div class="section">
     <h2>Additional Information</h2>
-    
-    <!-- Comments Section -->
     {% if 'comments' in visible_fields %}
-    <h3>Comments:</h3>
-    <p>{{ crew_check_meta.comments if crew_check_meta and crew_check_meta.comments else "None" }}</p>
+      <h3>Comments:</h3>
+      <p>{{ crew_check_meta.comments or "None" }}</p>
     {% endif %}
-    <!-- Flight & Check Information (Three Column Layout) -->
+
     <div class="info-container">
       {% if 'flight_times' in visible_fields %}
       <div class="info-column">
@@ -199,36 +213,34 @@
       {% endif %}
       <div class="info-column">
         {% if 'current_check_due' in visible_fields %}
-        <p><strong>Current Check Due:</strong> {{ crew_check_meta.current_check_due.strftime('%Y-%m-%d') if crew_check_meta.current_check_due else "Not Provided" }}</p>
+          <p><strong>Current Check Due:</strong> {{ crew_check_meta.current_check_due.strftime('%Y-%m-%d') if crew_check_meta.current_check_due else "Not Provided" }}</p>
         {% endif %}
         {% if 'test_result' in visible_fields %}
-        <p><strong>Test Result:</strong> {{ crew_check_meta.test_result or "Not Available" }}</p>
+          <p><strong>Test Result:</strong> {{ crew_check_meta.test_result or "Not Available" }}</p>
         {% endif %}
         {% if 'logbook_sticker_issued' in visible_fields %}
-        <p><strong>Logbook Sticker Issued:</strong> {{ crew_check_meta.logbook_sticker_issued or "Not Provided" }}</p>
+          <p><strong>Logbook Sticker Issued:</strong> {{ crew_check_meta.logbook_sticker_issued or "Not Provided" }}</p>
         {% endif %}
       </div>
       <div class="info-column">
         {% if 'next_check_due' in visible_fields %}
-        <p><strong>Next Check Due:</strong> {{ crew_check_meta.next_check_due.strftime('%Y-%m-%d') if crew_check_meta.next_check_due else "Not Provided" }}</p>
+          <p><strong>Next Check Due:</strong> {{ crew_check_meta.next_check_due.strftime('%Y-%m-%d') if crew_check_meta.next_check_due else "Not Provided" }}</p>
         {% endif %}
         {% if 'examiner_name' in visible_fields %}
-        <p><strong>Examiner Name:</strong> {{ crew_check_meta.examiner_name if crew_check_meta and crew_check_meta.examiner_name else "Not Provided" }}</p>
+          <p><strong>Examiner Name:</strong> {{ crew_check_meta.examiner_name or "Not Provided" }}</p>
         {% endif %}
         {% if 'examiner_license_number' in visible_fields %}
-        <p><strong>Examiner Licence Number:</strong> {{ crew_check_meta.examiner_license_number if crew_check_meta and crew_check_meta.examiner_license_number else "Not Provided" }}</p>
+          <p><strong>Examiner Licence Number:</strong> {{ crew_check_meta.examiner_license_number or "Not Provided" }}</p>
         {% endif %}
       </div>
     </div>
-  <!-- Assessment Comments Section -->
+
     <div class="section">
       <h2>Assessment Comments</h2>
       {% for grade in crew_check_meta.grades if grade.grade_comment %}
         <p><strong>{{ grade.check_item.item_name }}:</strong> {{ grade.grade_comment }}</p>
       {% endfor %}
     </div>
-  </body>
-  </html>
   </div>
 </body>
 </html>

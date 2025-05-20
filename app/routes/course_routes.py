@@ -58,11 +58,11 @@ def start_course_again(course_id):
         db.session.commit()
 
     flash("Your progress has been reset. Start the course again.", "info")
-    return redirect(url_for('view_course', course_id=course_id))
+    return redirect(url_for('course.view_course', course_id=course_id))
 
 @course_bp.route('/manage_courses', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@roles_required('Training Team', 'Admin')
 def manage_courses():
     if request.method == 'POST':
         # Fetch form data
@@ -81,11 +81,11 @@ def manage_courses():
         # Validate required fields
         if not title or not description or not role_type_ids or not ppt_file or passing_mark is None:
             flash('All fields, including Passing Mark, are required.', 'danger')
-            return redirect(url_for('manage_courses'))
+            return redirect(url_for('course.manage_courses'))
 
         # Save the uploaded PowerPoint file
         ppt_filename = secure_filename(ppt_file.filename)
-        ppt_path = os.path.join(current_app.config['UPLOAD_FOLDER'], course.ppt_file)
+        ppt_path     = os.path.join(current_app.config['UPLOAD_FOLDER'], ppt_filename)
         ppt_file.save(ppt_path)
 
         # Create the course instance
@@ -108,7 +108,7 @@ def manage_courses():
         db.session.commit()
 
         flash(f'Course "{title}" created successfully.', 'success')
-        return redirect(url_for('manage_courses'))
+        return redirect(url_for('course.manage_courses'))
 
     # Fetch existing courses and roles for display
     courses = Course.query.all()
@@ -134,7 +134,7 @@ def edit_course(course_id):
 
         if not title or not role_type_ids or passing_mark is None:
             flash('All required fields must be filled.', 'danger')
-            return redirect(url_for('edit_course', course_id=course_id))
+            return redirect(url_for('course.edit_course', course_id=course_id))
 
         # Update course details
         course.title = title
@@ -151,7 +151,7 @@ def edit_course(course_id):
 
         db.session.commit()
         flash(f'Course "{title}" updated successfully.', 'success')
-        return redirect(url_for('manage_courses'))
+        return redirect(url_for('course.manage_courses'))
 
     # Fetch roles for the form
     roles = RoleType.query.all()
@@ -163,70 +163,77 @@ def view_course(course_id):
     course = Course.query.get_or_404(course_id)
 
     # Check if the user has access to the course
-    user_roles = [role.roleID for role in current_user.roles]
+    user_roles   = [role.roleID for role in current_user.roles]
     course_roles = [role.roleID for role in course.roles]
-
     if not set(user_roles).intersection(course_roles) and not current_user.is_admin:
         flash('You do not have access to this course.', 'danger')
         return redirect(url_for('user_dashboard'))
 
     # Ensure progress is tracked
-    progress = UserSlideProgress.query.filter_by(user_id=current_user.id, course_id=course_id).first()
+    progress = UserSlideProgress.query.filter_by(
+        user_id=current_user.id,
+        course_id=course_id
+    ).first()
     if not progress:
-        progress = UserSlideProgress(user_id=current_user.id, course_id=course_id, last_slide_viewed=0)
+        progress = UserSlideProgress(
+            user_id=current_user.id,
+            course_id=course_id,
+            last_slide_viewed=0
+        )
         db.session.add(progress)
         db.session.commit()
 
-    # Extract slides
-    ppt_path = os.path.join(current_app.config['UPLOAD_FOLDER'], course.ppt_file)
-    slides_folder = os.path.join(current_app.static_folder, 'Course_Powerpoints', f'slides_{course.id}')
+    # === FIX: use course.ppt_file instead of undefined ppt_filename
+    ppt_path = os.path.join(
+        current_app.config['UPLOAD_FOLDER'],
+        course.ppt_file
+    )
+    slides_folder = os.path.join(
+        current_app.static_folder,
+        'Course_Powerpoints',
+        f'slides_{course.id}'
+    )
     os.makedirs(slides_folder, exist_ok=True)
     if not os.listdir(slides_folder):
         extract_slides_to_png(ppt_path, slides_folder)
 
     slide_paths = sorted(
-        [os.path.join(slides_folder, f) for f in os.listdir(slides_folder) if f.endswith(".png")],
+        [os.path.join(slides_folder, f)
+         for f in os.listdir(slides_folder)
+         if f.endswith(".png")],
         key=natural_sort_key
     )
     slide_count = len(slide_paths)
     slide_index = int(request.args.get('slide', 0))
 
-    # Validate the slide index
+    # Validate and update progress
     if slide_index < 0 or slide_index >= slide_count:
         flash('Invalid slide index.', 'danger')
         return redirect(url_for('user_dashboard'))
-
-    # Update progress
     if slide_index >= progress.last_slide_viewed:
         progress.last_slide_viewed = slide_index
 
-    # Handle completion logic
-    is_last_slide = slide_index == slide_count - 1
-    if is_last_slide and not course.has_exam:
-        progress.completed = True  # Mark as completed if no exam and last slide is viewed
+    # Mark completed if no exam on last slide
+    is_last_slide = (slide_index == slide_count - 1)
+    # Only allow marking as complete via the "Finish" button route
+    pass  # Do nothing here
+
     db.session.commit()
 
-    # Debugging Progress
-    print(f"Slide index: {slide_index}")
-    print(f"Last slide viewed: {progress.last_slide_viewed}")
-    print(f"Completed: {progress.completed}")
-    print(f"Total slides: {slide_count}")
-
-    # Determine buttons to show
-    show_finish = not course.has_exam and is_last_slide
-    show_take_exam = course.has_exam and is_last_slide
-
-    # Pass data to the template
     return render_template(
         'course/view_course.html',
         course=course,
-        current_slide=slide_index + 1,  # 1-based slide count for display
+        current_slide=slide_index + 1,
         total_slides=slide_count,
-        slide_image=url_for('static', filename=f"Course_Powerpoints/slides_{course.id}/{os.path.basename(slide_paths[slide_index])}"),
+        slide_image=url_for(
+            'static',
+            filename=f'Course_Powerpoints/slides_{course.id}/'
+                     f'{os.path.basename(slide_paths[slide_index])}'
+        ),
         next_slide=slide_index + 1 if slide_index + 1 < slide_count else None,
         prev_slide=slide_index - 1 if slide_index > 0 else None,
-        show_finish=show_finish,
-        show_take_exam=show_take_exam
+        show_finish=not course.has_exam and is_last_slide,
+        show_take_exam=course.has_exam and is_last_slide
     )
 
 @course_bp.route('/uploads/<path:filename>')
@@ -248,7 +255,7 @@ def delete_course(course_id):
             shutil.rmtree(slides_folder)  # Attempt to remove the directory
         except Exception as e:
             flash(f"Permission error: Unable to delete slides folder. {e}", 'danger')
-            return redirect(url_for('manage_courses'))
+            return redirect(url_for('course.manage_courses'))
 
     # Correct the PowerPoint file path
     ppt_path = os.path.join(current_app.root_path, 'static', 'Course_Powerpoints', course.ppt_file)
@@ -257,7 +264,7 @@ def delete_course(course_id):
             os.remove(ppt_path)
         except Exception as e:
             flash(f"Permission error: Unable to delete PowerPoint file. {e}", 'danger')
-            return redirect(url_for('manage_courses'))
+            return redirect(url_for('course.manage_courses'))
 
     # Delete associated course data
     try:
@@ -278,10 +285,10 @@ def delete_course(course_id):
         db.session.commit()
     except Exception as e:
         flash(f"Error deleting course data: {e}", 'danger')
-        return redirect(url_for('manage_courses'))
+        return redirect(url_for('course.manage_courses'))
 
     flash(f'Course "{course.title}" and all associated data deleted successfully.', 'success')
-    return redirect(url_for('manage_courses'))
+    return redirect(url_for('course.manage_courses'))
 @course_bp.route('/course/<int:course_id>/finish', methods=['POST'])
 @login_required
 def finish_course(course_id):
@@ -302,7 +309,7 @@ def finish_course(course_id):
 
     db.session.commit()
     flash("Course completed successfully!", "success")
-    return redirect(url_for('user_dashboard'))
+    return redirect(url_for('user.user_dashboard'))
 
 @course_bp.route('/course/<int:course_id>/take_exam', methods=['GET', 'POST'])
 @login_required
@@ -498,27 +505,121 @@ def add_question(course_id):
 def delete_question(question_id):
     question = Questions.query.get_or_404(question_id)
     course_id = question.course_id
+
+    # 1) Delete all user‐submitted answers for this question
+    UserAnswer.query.filter_by(question_id=question_id).delete(synchronize_session=False)
+
+    # 2) Delete all answer choices for this question
+    Answers.query.filter_by(question_id=question_id).delete(synchronize_session=False)
+
+    # 3) Delete the question itself
     db.session.delete(question)
     db.session.commit()
-    flash("Question deleted successfully!", "success")
-    return redirect(url_for('manage_questions', course_id=course_id))
 
-@course_bp.route('/admin/questions/<int:course_id>', methods=['GET', 'POST'])
+    # 4) Tell the JS caller we succeeded
+    return '', 204
+
+@course_bp.route('/<int:course_id>', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def manage_questions(course_id):
-    course = Course.query.get_or_404(course_id)
+    course    = Course.query.get_or_404(course_id)
     questions = Questions.query.filter_by(course_id=course_id).all()
 
     if request.method == 'POST':
-        question_text = request.form['question_text']
-        new_question = Questions(text=question_text, course_id=course_id)
-        db.session.add(new_question)
-        db.session.commit()
-        flash('Question added successfully!', 'success')
-        return redirect(url_for('manage_questions', course_id=course_id))
+        form_action = request.form.get('form_action')
 
-    return render_template('course/exams/manage_questions.html', course=course, questions=questions)
+        # --- Add a new question ---
+        if form_action == 'add':
+            text = request.form['question_text'].strip()
+            if not text:
+                flash("Question text cannot be empty.", "danger")
+            else:
+                db.session.add(Questions(text=text, course_id=course_id))
+                db.session.commit()
+                flash("Added new question.", "success")
+
+        # --- Edit an existing question ---
+        elif form_action == 'edit':
+            qid      = int(request.form['question_id'])
+            text     = request.form['question_text'].strip()
+            question = Questions.query.get_or_404(qid)
+            if not text:
+                flash("Question text cannot be empty.", "danger")
+            else:
+                question.text = text
+                db.session.commit()
+                flash("Question updated.", "success")
+
+        # --- Update / Delete / Add Answers in bulk ---
+        elif form_action == 'update_answers':
+            qid = int(request.form['question_id'])
+
+            # 1) Delete any answers marked for removal
+            for key in request.form:
+                if key.startswith('delete_answer_'):
+                    aid = int(key.split('_')[-1])
+                    ans = Answers.query.get(aid)
+                    if ans:
+                        db.session.delete(ans)
+
+            # 2) Update remaining existing answers
+            for key, val in request.form.items():
+                if key.startswith('answer_text_'):
+                    aid = int(key.split('_')[-1])
+                    ans = Answers.query.get_or_404(aid)
+                    ans.text = val.strip()
+                    # checkbox presence → correct, absence → incorrect
+                    ans.is_correct = f'is_correct_{aid}' in request.form
+
+            # 3) Add any new answers
+            new_texts    = request.form.getlist('new_answer_text')
+            new_corrects = request.form.getlist('new_is_correct')
+            for idx, text in enumerate(new_texts):
+                t = text.strip()
+                if not t:
+                    continue
+                corr = False
+                # if the checkbox for this new answer was checked
+                if idx < len(new_corrects):
+                    corr = True
+                db.session.add(Answers(
+                    text=t,
+                    is_correct=corr,
+                    question_id=qid
+                ))
+
+            db.session.commit()
+            flash('Answers updated successfully!', 'success')
+
+        return redirect(url_for('.manage_questions', course_id=course_id))
+
+    # --- AJAX GETs for each modal variant ---
+    modal_type = request.args.get('modal')
+    qid        = request.args.get('question_id', type=int)
+
+    if modal_type == 'add':
+        return render_template('course/_add_question_form.html', course=course)
+
+    if modal_type == 'edit' and qid:
+        question = Questions.query.get_or_404(qid)
+        return render_template('course/_edit_question_form.html', question=question)
+
+    if modal_type == 'answers' and qid:
+        question = Questions.query.get_or_404(qid)
+        answers  = Answers.query.filter_by(question_id=qid).all()
+        return render_template(
+            'course/_manage_answers_list.html',
+            question=question,
+            answers=answers
+        )
+
+    # --- Fallback: full page render ---
+    return render_template(
+        'course/exams/manage_questions.html',
+        course=course,
+        questions=questions
+    )
 
 @course_bp.route('/admin/questions/edit/<int:question_id>', methods=['GET', 'POST'])
 @login_required
@@ -588,12 +689,11 @@ def manage_answers(question_id):
 @admin_required
 def delete_answer(answer_id):
     answer = Answers.query.get_or_404(answer_id)
-    question_id = answer.question_id  # Save question ID before deleting
-
+    question_id = answer.question_id
     db.session.delete(answer)
     db.session.commit()
-    flash('Answer deleted successfully.', 'success')
-    return redirect(url_for('manage_answers', question_id=question_id))
+    # Return 204 No Content so your fetch() call sees success
+    return '', 204
 
 @course_bp.route('/update_answer/<int:answer_id>', methods=['POST'])
 @login_required
@@ -785,7 +885,7 @@ def view_completed_users(course_id):
     # Ensure the course doesn't have an exam
     if course.has_exam:
         flash("This course has exams. Please use the 'Attempts' button instead.", "danger")
-        return redirect(url_for('course.manage_courses'))
+        return redirect(url_for('course.course.manage_courses'))
 
     # Fetch users who have completed the course
     completions = (

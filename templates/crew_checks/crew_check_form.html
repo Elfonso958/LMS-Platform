@@ -8,6 +8,9 @@
   <h1 class="mb-4">Crew Check Form</h1>
   <!-- Append draft_id as a query parameter if check_meta exists -->
   <form method="POST" action="{{ url_for('crew_checks.crew_check_form', crew_check_id=crew_check.id) }}{% if check_meta %}?draft_id={{ check_meta.id }}{% endif %}">
+    <input type="hidden"
+    id="current_draft_id"
+    value="{{ check_meta.id if check_meta else '' }}">
     <!-- Candidate Information Section -->
     <div class="row mb-3">
       {% if 'candidate_name' in visible_fields %}
@@ -47,9 +50,13 @@
       <div class="col-md-3">
         <label for="medical_expiry" class="form-label">Medical Expiry</label>
         <input type="text" class="form-control form-control-sm" id="medical_expiry" name="medical_expiry" readonly
-          value="{% if check_meta and check_meta.candidate and check_meta.candidate.medical_expiry %}{{ check_meta.candidate.medical_expiry.strftime('%Y-%m-%d') }}{% else %}{{ candidate_data.medical_expiry }}{% endif %}">
+          value="{% if check_meta and check_meta.candidate and check_meta.candidate.medical_expiry %}
+            {{ check_meta.candidate.medical_expiry | format_ddmmyyyy }}
+          {% else %}
+            {{ candidate_data.medical_expiry | format_ddmmyyyy }}
+          {% endif %}">
       </div>
-      {% endif %}      
+      {% endif %}        
     </div>
 
     <!-- Other form fields -->
@@ -148,7 +155,7 @@
             <div class="form-check form-check-inline">
               <input type="radio" class="form-check-input" name="grade_{{ item.id }}" value="NA"
                 {% if check_meta and check_meta.get_grade(item.id) == 'NA' %}checked{% endif %} {% if read_only %}disabled{% endif %}>
-              <label class="form-check-label small">Not Assessed (NA)</label>
+              <label class="form-check-label small">NA</label>
             </div>
           </td>
           <td class="small">
@@ -178,11 +185,19 @@
                       {% if check_meta.is_complete %}readonly{% endif %}>{{ check_meta.get_grade_comment(item.id) if check_meta else '' }}</textarea>
                   </div>
                   <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" onclick="closeSignModal()">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="signSubmitBtn" onclick="submitSign()">
-                      Submit
-                      <span id="signSpinner" class="spinner-border spinner-border-sm ms-2" role="status" style="display: none;"></span>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                      Cancel
                     </button>
+                    <button
+                      type="button"
+                      class="btn btn-primary comment-submit-btn"
+                      data-item-id="{{ item.id }}"
+                      onclick="submitComment(event)"
+                    >
+                      Submit
+                      <span class="comment-spinner spinner-border spinner-border-sm ms-2"
+                            role="status" style="display: none;"></span>
+                    </button>                                                        
                   </div>                  
                 </div>
               </div>
@@ -347,6 +362,62 @@
     </div>
     {% endif %}
   </div>
+<!-- Grading Matrix Section -->
+<div class="accordion mt-5" id="gradingMatrixAccordion">
+  <div class="accordion-item">
+    <h2 class="accordion-header" id="gradingMatrixHeading">
+      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#gradingMatrixCollapse" aria-expanded="false" aria-controls="gradingMatrixCollapse">
+        Grading Matrix
+      </button>
+    </h2>
+    <div id="gradingMatrixCollapse" class="accordion-collapse collapse" aria-labelledby="gradingMatrixHeading" data-bs-parent="#gradingMatrixAccordion">
+      <div class="accordion-body">
+        <table class="table table-bordered table-sm text-sm">
+          <thead class="table-light">
+            <tr>
+              <th>Performance Level</th>
+              <th>Key Descriptors</th>
+              <th>Grade</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="table-success">
+              <td>Exceeds all requirements</td>
+              <td>Commendable, Very Good, Excellent, Effective, Efficient, Exemplary</td>
+              <td>5 – Excellent</td>
+            </tr>
+            <tr class="table-primary">
+              <td>Easily meets all requirements</td>
+              <td>Expected, Good, Appropriate, Solid, Sound</td>
+              <td>4 – Standard</td>
+            </tr>
+            <tr class="table-info">
+              <td>All requirements achieved but could be improved</td>
+              <td>Adequate, Competent</td>
+              <td>3 – Acceptable</td>
+            </tr>
+            <tr class="table-warning">
+              <td>Can perform tasks but needs further development</td>
+              <td>Developing, Weak, Slow, Uncertain, Hesitant</td>
+              <td>2 – Marginal</td>
+            </tr>
+            <tr class="table-danger">
+              <td>Cannot perform tasks adequately</td>
+              <td>Unacceptable, Struggling, Ineffective, Poor, Inappropriate, Unsatisfactory</td>
+              <td>1 – Unacceptable</td>
+            </tr>
+            <tr class="table-secondary">
+              <td>Not observed or not applicable</td>
+              <td>Not observed</td>
+              <td>NA – Not Assessed</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
   <!-- Password Modal -->
 <div class="modal" id="signModal" style="display:none;">
     <div class="modal-dialog">
@@ -361,7 +432,20 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeSignModal()">Cancel</button>
-          <button type="button" class="btn btn-primary" onclick="submitSign()">Submit</button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            id="signSubmitBtn"
+            onclick="submitSign()"
+          >
+            Submit
+            <span
+              id="signSpinner"
+              class="spinner-border spinner-border-sm ms-2"
+              role="status"
+              style="display: none;"
+            ></span>
+          </button>
         </div>
       </div>
     </div>
@@ -567,7 +651,7 @@
 
                 document.getElementById('licence_type').value = data.license_type || "";
                 document.getElementById('licence_number').value = data.license_number || "";
-                document.getElementById('medical_expiry').value = data.medical_expiry || "";
+                document.getElementById('medical_expiry').value = formatDateDDMMYYYY(data.medical_expiry) || "";
                 
                 candidateCrewCode = data.crew_code || "";
                 document.getElementById('candidate_sign_btn').setAttribute('data-candidate-crew-code', candidateCrewCode);
@@ -654,7 +738,111 @@ function saveDraft() {
       }
     });
 
+  /**
+   * Saves the form as a draft and returns a Promise that resolves
+   * with the new draft_id (or rejects on error).
+   */
+   function saveDraftAsync() {
+    const form     = document.querySelector('form');
+    const formData = new FormData(form);
+    formData.append('save_draft', 'true');
 
+    return fetch(form.action, {
+      method: form.method,
+      body: formData
+    })
+    .then(res => res.json())
+    .then(json => {
+      if (!json.success) {
+        throw new Error(json.error || 'Draft save failed');
+      }
+      // update the hidden draft‐id input so future calls have it
+      document.getElementById('current_draft_id').value = json.draft_id;
+      return json.draft_id;
+    });
+  }
+
+  async function submitComment(e) {
+    const btn         = e.currentTarget;
+    const spinner     = btn.querySelector('.comment-spinner');
+    const itemId      = btn.dataset.itemId;
+    let   draftId     = document.getElementById('current_draft_id').value;
+    const crewCheckId = document.getElementById('crew_check_id').value;
+
+    // Track if we just created the draft
+    let didAutoSave = false;
+
+    // 1) Auto‑save draft if needed
+    if (!draftId) {
+      try {
+        draftId = await saveDraftAsync();
+        didAutoSave = true;
+      } catch (err) {
+        return alert('Could not auto‑save draft: ' + err.message);
+      }
+    }
+
+    // 2) Grab the selected grade
+    const gradeInput = document.querySelector(`input[name="grade_${itemId}"]:checked`);
+    const gradeVal   = gradeInput ? gradeInput.value : 'NA';
+
+    // 3) Validate comment
+    const comment = document.getElementById(`commentBox_${itemId}`).value.trim();
+    if (!comment) {
+      return alert('Please enter a comment before submitting.');
+    }
+
+    // 4) Disable UI while saving
+    btn.disabled = true;
+    spinner.style.display = 'inline-block';
+
+    // 5) Send to backend
+    try {
+      const res  = await fetch('{{ url_for("crew_checks.save_comment") }}', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          item_id:  itemId,
+          grade:    gradeVal,
+          comment:  comment,
+          draft_id: draftId
+        })
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Save failed');
+
+      // 6) Close modal & mark button
+      bootstrap.Modal.getInstance(
+        document.getElementById(`commentModal_${itemId}`)
+      ).hide();
+      document.getElementById(`commentButton_${itemId}`)
+              .classList.add('btn-comment-added');
+
+      // 7) Redirect only if we just auto‑saved the draft
+      if (didAutoSave) {
+        window.location.href =
+          `/crew_check_form/${crewCheckId}?draft_id=${draftId}`;
+      }
+    } catch (err) {
+      alert(err.message || 'Unexpected error');
+    } finally {
+      btn.disabled = false;
+      spinner.style.display = 'none';
+    }
+  }
+  function formatDateDDMMYYYY(isoDateStr) {
+  if (!isoDateStr) return "";
+  const [year, month, day] = isoDateStr.split("-");
+  return `${day}/${month}/${year}`;
+}
 
 </script>
+<style>
+  .accordion-button::after {
+    transition: transform 0.2s ease-in-out;
+  }
+  .accordion-button.collapsed::after {
+    transform: rotate(-90deg);
+  }
+</style>
 {% endblock %}

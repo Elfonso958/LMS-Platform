@@ -19,7 +19,7 @@ from flask import render_template, redirect, url_for, flash, request, current_ap
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager, login_user, logout_user, login_required,current_user,UserMixin
 from app import create_app, db, mail
-from app.models import Course, RoleType, UserSlideProgress, UserExamAttempt, Questions, Answers, UserAnswer, course_role, User, db, PayrollInformation, CrewCheck, CrewCheckMeta, CheckItem, user_role,CheckItemGrade, LineTrainingForm, Location, Port, HandlerFlightMap, GroundHandler, CrewAcknowledgement, DocumentType
+from app.models import Course, RoleType, UserSlideProgress, UserExamAttempt, Questions, Answers, UserAnswer, course_role, User, db, PayrollInformation, CrewCheck, CrewCheckMeta, CheckItem, user_role,CheckItemGrade, LineTrainingForm, Location, Port, HandlerFlightMap, GroundHandler, CrewAcknowledgement, DocumentType, UserHRTask, HRTaskTemplate
 from app.models import Task,TaskCompletion,Topic, LineTrainingItem,UserLineTrainingForm, Sector, RosterChange, Flight, FormTemplate,RoutePermission,Qualification,EmployeeSkill, EmailConfig, JobTitle, Timesheet, Location, PayrollPeriod,PayrollInformation, NavItem, NavItemPermission, DocumentReviewRequest # Import your models and database session
 from app.utils import extract_slides_to_png, calculate_exam_score, get_slide_count, admin_required, natural_sort_key, roles_required, generate_certificate
 from werkzeug.security import generate_password_hash
@@ -66,6 +66,17 @@ def user_dashboard():
         .join(course_role, Course.id == course_role.c.course_id)
         .filter(course_role.c.role_id.in_(user_roles))
         .all()
+    )
+    pending_tasks = (
+        UserHRTask.query
+          .join(HRTaskTemplate, UserHRTask.task_template)
+          .filter(
+            UserHRTask.user_id             == current_user.id,
+            UserHRTask.status              == 'Pending',
+            HRTaskTemplate.is_employee_task == True
+          )
+          .order_by(UserHRTask.due_date)
+          .all()
     )
 
     # Fetch qualifications for the current user
@@ -170,137 +181,121 @@ def user_dashboard():
         all_completed_courses=all_completed_courses,
         available_courses=available_courses,
         renewable_soon_courses=renewable_soon_courses,
-        qualifications=qualifications
+        qualifications=qualifications,
+        pending_tasks=pending_tasks
     )
 
 @user_bp.route('/user_profile', methods=['GET', 'POST'])
 @login_required
 def user_profile():
-    user_id = request.form.get('user_id', default=current_user.id, type=int) if request.method == 'POST' else request.args.get('user_id', default=current_user.id, type=int)
+    # Determine which user we’re editing
+    if request.method == 'POST':
+        user_id = request.form.get('user_id', default=current_user.id, type=int)
+    else:
+        user_id = request.args.get('user_id', default=current_user.id, type=int)
     user = User.query.get_or_404(user_id)
 
     current_app.logger.info(f"Loading profile for: ID={user.id}, Username={user.username}, Email={user.email}")
+
     payroll = PayrollInformation.query.filter_by(user_id=user.id).first()
     roles = RoleType.query.all()
     job_titles = JobTitle.query.all()
     users = User.query.all()
     user_roles = [role.roleID for role in user.roles]
     user_roles_names = [role.role_name for role in user.roles]
-    date_of_birth_input = request.form.get('date_of_birth', None)
-    medical_expiry_input = request.form.get('medical_expiry', None)
     locations = Location.query.order_by(Location.name).all()
 
     if request.method == 'POST':
         try:
-            # ✅ Ensure only the user or an admin can edit this profile
+            # Permission check
             if user.id != current_user.id and not current_user.is_admin:
                 flash('You do not have permission to edit this profile.', 'danger')
                 return redirect(url_for('user.user_profile', user_id=user.id))
 
             current_app.logger.info(f"🔍 Full Form Data Received: {request.form.to_dict()}")
 
-            # ✅ Basic User Editable Fields
-            user.email = request.form.get('email')
-            user.username = request.form['username']
-            user.phone_number = request.form.get('phone_number')
-            user.address = request.form.get('address')
-            user.next_of_kin = request.form.get('next_of_kin')
-            user.kin_phone_number = request.form.get('kin_phone_number')
-            user.date_of_birth = request.form.get('date_of_birth')
+            # -- Always-updatable fields --
+            user.email           = request.form.get('email')
+            user.username        = request.form.get('username')
+            user.phone_number    = request.form.get('phone_number')
+            user.address         = request.form.get('address')
+            user.next_of_kin     = request.form.get('next_of_kin')
+            user.kin_phone_number= request.form.get('kin_phone_number')
+            # Date fields: only set if non-empty
+            dob_input            = request.form.get('date_of_birth', '').strip()
+            user.date_of_birth   = dob_input or None
 
-            # ✅ Admin-Only Fields
+            # -- Admin-only fields --
             if current_user.is_admin:
-                user.license_type = request.form.get('license_type')
-                user.license_number = request.form.get('license_number')
-                user.date_of_birth = None if not date_of_birth_input or date_of_birth_input.strip() == "" else date_of_birth_input
-                user.medical_expiry = None if not medical_expiry_input or medical_expiry_input.strip() == "" else medical_expiry_input
+                # Authentication type & password
+                new_auth = request.form.get('auth_type')
+                if new_auth in ('local', 'envision') and new_auth != user.auth_type:
+                    current_app.logger.info(f"Auth type change: {user.auth_type} → {new_auth}")
+                    user.auth_type = new_auth
+                if user.auth_type == 'local':
+                    pwd = request.form.get('password', '').strip()
+                    if pwd:
+                        user.password = generate_password_hash(pwd, method='pbkdf2:sha256')
 
+                # License / medical
+                user.license_type    = request.form.get('license_type')
+                user.license_number  = request.form.get('license_number')
+                med_exp = request.form.get('medical_expiry', '').strip()
+                user.medical_expiry  = med_exp or None
+
+                # Roles
                 selected_roles = request.form.getlist('roles')
-                user.roles = [RoleType.query.get(role_id) for role_id in selected_roles]
+                user.roles = [RoleType.query.get(rid) for rid in selected_roles]
 
-                user.is_admin = 'is_admin' in request.form  # ✅ Convert checkbox to boolean
-                location_id = request.form.get('location_id')
-                user.location_id = location_id if location_id else None
+                # Admin flag
+                user.is_admin = 'is_admin' in request.form
 
-                # ✅ Handle Authentication Type Change
-                new_auth_type = request.form.get('auth_type')
-                if new_auth_type and new_auth_type in ['local', 'envision']:
-                    if user.auth_type != new_auth_type:
-                        current_app.logger.info(f"Changing authentication type for User ID={user.id} from {user.auth_type} to {new_auth_type}")
-                        user.auth_type = new_auth_type
+                # Location
+                loc_id = request.form.get('location_id')
+                user.location_id = loc_id or None
 
-                        # ✅ If changing to Local, allow password update
-                        if new_auth_type == "local":
-                            new_password = request.form.get('password', "").strip()
+                # Job title & manager relationship
+                jt = request.form.get('job_title_id')
+                user.job_title_id = jt or None
+                mgr = request.form.get('manager_id')
+                user.reports_to   = mgr or None
 
-                            if new_password:
-                                current_app.logger.info(f"🔍 Received new password for User ID={user.id}: {new_password}")
+                # Envision link handled separately in JS
 
-                                hashed_password = generate_password_hash(new_password, method='pbkdf2:sha256')
-                                current_app.logger.info(f"🔑 Generated hashed password for User ID={user.id}: {hashed_password}")
+                # -- Payroll updates --
+                if not payroll:
+                    payroll = PayrollInformation(user_id=user.id)
+                    db.session.add(payroll)
 
-                                user.password = hashed_password
-                            else:
-                                current_app.logger.warning(f"⚠️ No password provided for User ID={user.id}, skipping update.")
-
-            # ✅ Allow Local Users to Update Their Password Without Changing Auth Type
-            if user.auth_type == "local":
-                new_password = request.form.get('password', "").strip()
-                if new_password:
-                    current_app.logger.info(f"🔍 Received new password update for existing local user ID={user.id}: {new_password}")
-
-                    hashed_password = generate_password_hash(new_password, method='pbkdf2:sha256')
-                    current_app.logger.info(f"🔑 Generated new hashed password for existing local user ID={user.id}: {hashed_password}")
-
-                    user.password = hashed_password
-                else:
-                    current_app.logger.info(f"🛑 No password update provided for existing local user ID={user.id}, skipping.")
-
-            # ✅ Update Job Title & Reporting Structure
-            job_title_id = request.form.get('job_title_id')
-            manager_id = request.form.get('manager_id')
-
-            user.job_title_id = job_title_id if job_title_id else None
-            user.reports_to = manager_id if manager_id else None
-
-            # ✅ Ensure payroll exists
-            if not payroll:
-                payroll = PayrollInformation(user_id=user.id)
-                db.session.add(payroll)
-
-            payroll.type_of_employment = request.form.get('type_of_employment')
-            payroll.minimum_hours = request.form.get('minimum_hours') == 'True'
-            payroll.hours = request.form.get('hours') if payroll.minimum_hours else None
-            payroll.kiwisaver_attached = request.form.get('kiwisaver_attached') == 'True'
-            payroll.kiwisaver_type = request.form.get('kiwisaver_type') if payroll.kiwisaver_attached else None
-            payroll.paye_attached = request.form.get('paye_attached') == 'True'
-            payroll.ir330_attached = request.form.get('ir330_attached') == 'True'
-            payroll.ird_number = request.form.get('ird_number')
-            payroll.bank_account_details = request.form.get('bank_account_details')
-
+                payroll.type_of_employment    = request.form.get('type_of_employment')
+                payroll.minimum_hours         = request.form.get('minimum_hours') == 'True'
+                payroll.hours                 = request.form.get('hours') if payroll.minimum_hours else None
+                payroll.bank_account_details  = request.form.get('bank_account_details')
+                
+            # Commit *all* changes
             db.session.commit()
-            current_app.logger.info(f"✅ Password successfully updated in database for User ID={user.id}")  # Debug
+
             flash('Profile updated successfully.', 'success')
 
         except IntegrityError as e:
             db.session.rollback()
-            current_app.logger.error(f"❌ Database IntegrityError for user {user.id} ({user.username}): {str(e)}")
-            flash(f'An error occurred: {str(e)}', 'danger')
+            current_app.logger.error(f"Database IntegrityError for user {user.id}: {e}")
+            flash(f'An error occurred: {e.orig}', 'danger')
 
         return redirect(url_for('user.user_profile', user_id=user.id))
 
+    # GET: render form
     return render_template(
-        'user/user_profile.html', 
-        user=user, 
-        payroll=payroll, 
-        roles=roles, 
+        'user/user_profile.html',
+        user=user,
+        payroll=payroll,
+        roles=roles,
         job_titles=job_titles,
         users=users,
-        user_roles=user_roles, 
+        user_roles=user_roles,
         user_roles_names=user_roles_names,
-        locations=locations
+        locations=locations,
     )
-
 
 ######################
 ###User Crew Checks###

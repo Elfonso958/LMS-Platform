@@ -1,391 +1,340 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container mt-5">
-    <h1 class="text-center">👤 User Profile</h1>
-    <p class="text-center text-muted">Update your personal details below.</p>
+<style>
+  .section-divider {
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    border-top: 2px solid #ccc;
+  }
+  .section-header {
+    background-color: #f1f4f9;
+    padding: 0.75rem 1rem;
+    border-left: 4px solid #0d6efd;
+    margin-bottom: 1rem;
+    margin-top: 2rem;
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #0d2545;
+  }
+  @media (min-width: 992px) {
+    #form-nav {
+      position: sticky;
+      top: 80px;
+    }
+  }
+</style>
 
-    <form method="POST" action="{{ url_for('user.user_profile', user_id=user.id) }}">
-        <div class="row">
-            <div class="col-md-8">
-                <!-- Personal Information -->
-                <div class="card shadow mb-4">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0">📧 Contact Information</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label for="username" class="form-label">Name</label>
-                                <input type="text" class="form-control" id="username" name="username" value="{{ user.username }}" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="email" class="form-label">Email</label>
-                                <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}" required>
-                            </div>
-                        </div>
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label for="phone_number" class="form-label">Phone Number</label>
-                                <input type="text" class="form-control" id="phone_number" name="phone_number" value="{{ user.phone_number }}">
-                            </div>
-                            <div class="col-md-6">
-                                <label for="address" class="form-label">🏠 Address</label>
-                                <input type="text" class="form-control" id="address" name="address" value="{{ user.address }}">
-                            </div>
-                        </div>
+<div class="container-fluid mt-4">
+  <div class="row">
+    <!-- SIDEBAR NAVIGATION -->
+    <div class="col-lg-2 d-none d-lg-block">
+      <div id="form-nav" class="bg-light border rounded p-3">
+        <h6 class="mb-2">Sections</h6>
+        <ul class="nav flex-column small">
+          <li><a href="#section-personal" class="nav-link">Personal Info</a></li>
+          <li><a href="#section-emergency" class="nav-link">Emergency Contact</a></li>
+          {% if current_user.is_admin %}
+          <li><a href="#section-employment" class="nav-link">Employment</a></li>
+          <li><a href="#section-access" class="nav-link">Access</a></li>
+          <li><a href="#section-license" class="nav-link">Licensing</a></li>
+          <li><a href="#section-payroll" class="nav-link">Payroll</a></li>
+          <li><a href="#section-onboarding" class="nav-link">Onboarding</a></li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
 
-                        <!-- Authentication Type (Admins Only) -->
-                        {% if current_user.is_admin %}
-                        <div class="mb-3">
-                            <label for="auth_type" class="form-label">🔐 Authentication Type</label>
-                            <select class="form-select" id="auth_type" name="auth_type" onchange="toggleAuthFields()">
-                                <option value="local" {% if user.auth_type == "local" %}selected{% endif %}>Local Authentication</option>
-                                <option value="envision" {% if user.auth_type == "envision" %}selected{% endif %}>Envision API</option>
-                            </select>
-                        </div>
-                        {% else %}
-                        <!-- Display Authentication Type for Non-Admins -->
-                        <input type="hidden" id="auth_type" name="auth_type" value="{{ user.auth_type }}">
-                        <p class="text-muted"><strong>🔐 Authentication Type:</strong> {{ user.auth_type | capitalize }}</p>
-                        {% endif %}
-
-                        <!-- Password Field (Only for Local Users) -->
-                        <div class="mb-3" id="passwordField">
-                            <label for="password" class="form-label">🔑 Password</label>
-                            {% if current_user.is_admin or user.auth_type == "local" %}
-                            <input type="password" class="form-control" id="password" name="password" oninput="console.log('Password Field Updated:', this.value)">
-                            {% endif %}
-                        </div>
-
-                        <!-- Envision Crew Code and Employee ID (Only for Envision Users and Admins) -->
-                        {% if current_user.is_admin or user.auth_type == "envision" %}
-                        <div class="row mb-3" id="envisionFields">
-                            <div class="col-md-6">
-                                <label for="crew_code" class="form-label">Envision Crew Code</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="crew_code" name="crew_code" value="{{ user.crew_code }}" {% if not current_user.is_admin %}readonly{% endif %}>
-                                    {% if current_user.is_admin or 'Training Team' in current_user.roles %}
-                                    <button type="button" class="btn btn-secondary" id="link_to_envision">Link to Envision</button>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="employee_id" class="form-label">Employee ID</label>
-                                <input type="text" class="form-control" id="employee_id" name="employee_id" value="{{ user.employee_id }}" readonly>
-                            </div>
-                        </div>
-                        {% endif %}
-
-                        <div class="mb-3">
-                            <label for="roles" class="form-label">🏷️ Roles</label>
-                            <select class="form-select" id="roles" name="roles" multiple {% if not current_user.is_admin and 'Training Team' not in current_user.roles %}disabled{% endif %}>
-                                {% for role in roles %}
-                                    <option value="{{ role.roleID }}" {% if role.roleID in user_roles %}selected{% endif %}>
-                                        {{ role.role_name }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                            <small class="form-text text-muted">Hold Ctrl (Windows) or Command (Mac) to select multiple roles.</small>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card shadow mb-4">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">🌍 Location</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label for="location" class="form-label">User Location</label>
-                            <select class="form-select" id="location" name="location_id" {% if not current_user.is_admin %}disabled{% endif %}>
-                                <option value="">-- Select Location --</option>
-                                {% for location in locations %}
-                                <option value="{{ location.id }}" {% if user.location and user.location.id == location.id %}selected{% endif %}>
-                                    {{ location.name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                <!-- Emergency Contact -->
-                <div class="card shadow mb-4">
-                    <div class="card-header bg-warning text-dark">
-                        <h5 class="mb-0">🆘 Emergency Contact</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <label for="next_of_kin" class="form-label">Next of Kin</label>
-                                <input type="text" class="form-control" id="next_of_kin" name="next_of_kin" value="{{ user.next_of_kin }}">
-                            </div>
-                            <div class="col-md-6">
-                                <label for="kin_phone_number" class="form-label">Next of Kin Phone</label>
-                                <input type="text" class="form-control" id="kin_phone_number" name="kin_phone_number" value="{{ user.kin_phone_number }}">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- License Information -->
-                <div class="card shadow mb-4">
-                    <div class="card-header bg-info text-white">
-                        <h5 class="mb-0">✈️ License Information</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-4">
-                                <label for="license_type" class="form-label">License Type</label>
-                                <select class="form-select" id="license_type" name="license_type" {% if not current_user.is_admin %}disabled{% endif %}>
-                                    <option value="CPL" {% if user.license_type == "CPL" %}selected{% endif %}>CPL</option>
-                                    <option value="ATPL" {% if user.license_type == "ATPL" %}selected{% endif %}>ATPL</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="license_number" class="form-label">License Number</label>
-                                <input type="text" class="form-control" id="license_number" name="license_number" value="{{ user.license_number }}" {% if not current_user.is_admin %}readonly{% endif %}>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="medical_expiry" class="form-label">Medical Expiry</label>
-                                <input type="date" class="form-control" id="medical_expiry" name="medical_expiry" value="{{ user.medical_expiry.strftime('%Y-%m-%d') if user.medical_expiry else '' }}" {% if not current_user.is_admin %}readonly{% endif %}>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Employment Information (Editable Only by Admins) -->
-                <div class="card shadow mb-4">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">💼 Employment Information</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label for="type_of_employment" class="form-label">Type of Employment</label>
-                            <select class="form-select" id="type_of_employment" name="type_of_employment" {% if not current_user.is_admin %}disabled{% endif %}>
-                                <option value="Full Time" {% if payroll.type_of_employment == "Full Time" %}selected{% endif %}>Full Time</option>
-                                <option value="Part Time" {% if payroll.type_of_employment == "Part Time" %}selected{% endif %}>Part Time</option>
-                                <option value="Casual" {% if payroll.type_of_employment == "Casual" %}selected{% endif %}>Casual</option>
-                                <option value="Fixed Term" {% if payroll.type_of_employment == "Fixed Term" %}selected{% endif %}>Fixed Term</option>
-                            </select>
-                        </div>
-
-                        <div class="mb-3" id="hours_div" {% if not payroll.minimum_hours %}style="display:none"{% endif %}>
-                            <label for="hours" class="form-label">If yes, how many:</label>
-                            <input type="number" class="form-control" id="hours" name="hours" value="{{ payroll.hours or '' }}" {% if not current_user.is_admin %}readonly{% endif %}>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="bank_account_details" class="form-label">Bank Account Details</label>
-                            <input type="text" class="form-control" id="bank_account_details" name="bank_account_details" value="{{ payroll.bank_account_details or '' }}" {% if not current_user.is_admin %}readonly{% endif %}>
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <label for="job_title" class="form-label">Job Title:</label>
-                                <select id="job_title" name="job_title_id" class="form-select" {% if not current_user.is_admin %}disabled{% endif %} onchange="updateReportsTo()">
-                                    <option value="" {% if not user.job_title %}selected{% endif %}>-- Select Job Title --</option>
-                                    {% for job in job_titles %}
-                                    <option value="{{ job.id }}"
-                                            data-reports-to="{% if job.parent_job %}{{ job.parent_job.title }}{% else %}Not Assigned{% endif %}"
-                                            data-manager="{% if job.parent_job and job.parent_job.manager %}{{ job.parent_job.manager.username }}{% else %}No Manager Assigned{% endif %}"
-                                            {% if user.job_title and user.job_title.id == job.id %}selected{% endif %}>
-                                        {{ job.title }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                               
-                            <div class="mb-3">
-                                <label for="reports_to" class="form-label">Reports To:</label>
-                                <input type="text" id="reports_to" name="reports_to" class="form-control text-truncate"
-                                    value="{{ (user.job_title.parent_job.title | trim) ~ ' - ' ~ (user.job_title.parent_job.manager.username | trim) if user.job_title and user.job_title.parent_job and user.job_title.parent_job.manager else 'Not Assigned' }}"
-                                    readonly>
-
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Right Sidebar (Roles & Admin Privileges) -->
-            <div class="col-md-4">
-                <!-- Admin Toggle -->
-                {% if current_user.is_admin %}
-                <div class="card shadow mb-4">
-                    <div class="card-header bg-danger text-white">
-                        <h5 class="mb-0">⚠️ Admin Privileges</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="is_admin" name="is_admin" {% if user.is_admin %}checked{% endif %}>
-                            <label class="form-check-label" for="is_admin">Grant admin privileges</label>
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-
-                <!-- Role Management -->
-                <div class="card shadow mb-4">
-                    <div class="card-header bg-dark text-white">
-                        <h5 class="mb-0">🏷️ Roles</h5>
-                    </div>
-                    <div class="card-body">
-                        <label class="form-label">Current Roles:</label>
-                        <ul id="rolesList" class="list-group mb-3">
-                            {% for role_name in user_roles_names %}
-                                <li class="list-group-item">{{ role_name }}</li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </div>
-
+    <!-- MAIN FORM -->
+    <div class="col-lg-10">
+      <h2>Edit User</h2>
+      <form method="POST" class="row g-3" id="editUserForm"
+            action="{{ url_for('user.user_profile', user_id=user.id) }}">
         <input type="hidden" name="user_id" value="{{ user.id }}">
-        <div class="text-center">
-            <button type="submit" class="btn btn-primary btn-lg">💾 Save Changes</button>
+
+        <!-- PERSONAL INFO -->
+        <div class="col-12 section-header" id="section-personal">Personal Information</div>
+        <div class="col-md-6">
+          <label for="username" class="form-label">Full Name</label>
+          <input type="text" id="username" name="username"
+                 class="form-control{% if not current_user.is_admin %} readonly{% endif %}"
+                 value="{{ user.username }}" {% if not current_user.is_admin %}readonly{% endif %}>
         </div>
-    </form>
+        <div class="col-md-6">
+          <label for="email" class="form-label">Email</label>
+          <input type="email" id="email" name="email" class="form-control"
+                 value="{{ user.email }}" required>
+        </div>
+        <div class="col-md-6">
+          <label for="phone_number" class="form-label">Phone Number</label>
+          <input type="text" id="phone_number" name="phone_number" class="form-control"
+                 value="{{ user.phone_number }}">
+        </div>
+        <div class="col-md-6">
+          <label for="date_of_birth" class="form-label">Date of Birth</label>
+          <input type="date" id="date_of_birth" name="date_of_birth"
+                 class="form-control{% if not current_user.is_admin %} readonly{% endif %}"
+                 value="{{ user.date_of_birth or '' }}" {% if not current_user.is_admin %}readonly{% endif %}>
+        </div>
+
+        <!-- EMERGENCY CONTACT -->
+        <div class="col-12 section-header" id="section-emergency">Emergency Contact</div>
+        <div class="col-md-6">
+          <label for="next_of_kin" class="form-label">Next of Kin</label>
+          <input type="text" id="next_of_kin" name="next_of_kin" class="form-control"
+                 value="{{ user.next_of_kin }}">
+        </div>
+        <div class="col-md-6">
+          <label for="kin_phone_number" class="form-label">Kin Phone Number</label>
+          <input type="text" id="kin_phone_number" name="kin_phone_number"
+                 class="form-control" value="{{ user.kin_phone_number }}">
+        </div>
+
+        {% if current_user.is_admin %}
+        <!-- EMPLOYMENT DETAILS -->
+        <div class="col-12 section-header" id="section-employment">Employment Details</div>
+        <div id="envisionFields" class="row mb-3" style="display: none;">
+          <div class="col-md-6">
+            <label for="crew_code" class="form-label">Envision Crew Code</label>
+            <div class="input-group">
+              <input type="text" id="crew_code" name="crew_code" class="form-control"
+                     value="{{ user.crew_code }}">
+              <button type="button" class="btn btn-secondary" id="link_to_envision">
+                Link to Envision
+              </button>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label for="employee_id" class="form-label">Employee ID</label>
+            <input type="text" id="employee_id" name="employee_id" class="form-control" readonly
+                   value="{{ user.employee_id }}">
+          </div>
+        </div>
+
+        <div class="col-md-4">
+          <label for="job_title_id" class="form-label">Job Title</label>
+          <select id="job_title_id" name="job_title_id" class="form-select"
+                  onchange="updateManagerDisplay()">
+            <option value="">Select Job Title</option>
+            {% for jt in job_titles %}
+            <option value="{{ jt.id }}"
+                    data-manager="{% if jt.parent_job and jt.parent_job.manager %}{{ jt.parent_job.manager.username }}{% else %}—{% endif %}"
+                    {% if user.job_title_id == jt.id %}selected{% endif %}>
+              {{ jt.title }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label for="job_manager" class="form-label">Employee Manager</label>
+          <input type="text" id="job_manager" class="form-control readonly" readonly
+                 value="{% if user.job_title and user.job_title.parent_job and user.job_title.parent_job.manager %}{{ user.job_title.parent_job.manager.username }}{% else %}—{% endif %}">
+        </div>
+        <div class="col-md-4">
+          <label for="location_id" class="form-label">Location</label>
+          <select id="location_id" name="location_id" class="form-select">
+            <option value="">Select Location</option>
+            {% for loc in locations %}
+            <option value="{{ loc.id }}" {% if user.location_id == loc.id %}selected{% endif %}>
+              {{ loc.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-4">
+          <label for="auth_type" class="form-label">
+            Auth Type <span title="Password not required if Envision">❔</span>
+          </label>
+          <select id="auth_type" name="auth_type" class="form-select"
+                  onchange="toggleAuthFields()">
+            <option value="local" {% if user.auth_type=='local' %}selected{% endif %}>
+              Local
+            </option>
+            <option value="envision" {% if user.auth_type=='envision' %}selected{% endif %}>
+              Envision
+            </option>
+          </select>
+        </div>
+        <div class="col-md-4" id="passwordField">
+          <label for="password" class="form-label">Password</label>
+          <input type="password" id="password" name="password" class="form-control">
+        </div>
+
+        <!-- ACCESS CONTROL -->
+        <div class="col-12 section-header" id="section-access">Access Control</div>
+        <div class="col-md-6">
+          <label for="roles" class="form-label">Roles</label>
+          <select id="roles" name="roles" class="form-select" multiple>
+            {% for role in roles %}
+            <option value="{{ role.roleID }}" {% if role.roleID in user_roles %}selected{% endif %}>
+              {{ role.role_name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="is_admin" name="is_admin"
+                   {% if user.is_admin %}checked{% endif %}>
+            <label class="form-check-label" for="is_admin">Admin</label>
+          </div>
+        </div>
+
+        <!-- LICENSING -->
+        <div class="col-12 section-header" id="section-license">Licensing</div>
+        <div class="col-md-4">
+          <label for="license_type" class="form-label">License Type</label>
+          <input type="text" id="license_type" name="license_type" class="form-control"
+                 value="{{ user.license_type }}">
+        </div>
+        <div class="col-md-4">
+          <label for="license_number" class="form-label">License Number</label>
+          <input type="text" id="license_number" name="license_number" class="form-control"
+                 value="{{ user.license_number }}">
+        </div>
+        <div class="col-md-4">
+          <label for="medical_expiry" class="form-label">License Number</label>
+          <input type="date" id="medical_expiry" name="medical_expiry" class="form-control"
+                 value="{{ user.medical_expiry }}">
+        </div>
+
+        <!-- PAYROLL INFORMATION -->
+        <div class="col-12 section-header" id="section-payroll">Payroll Information</div>
+        <div class="col-md-4">
+          <label for="type_of_employment" class="form-label">Type of Employment</label>
+          <select id="type_of_employment" name="type_of_employment" class="form-select">
+            <option value="Full Time" {% if payroll.type_of_employment=='Full Time' %}selected{% endif %}>Full Time</option>
+            <option value="Part Time" {% if payroll.type_of_employment=='Part Time' %}selected{% endif %}>Part Time</option>
+            <option value="Casual" {% if payroll.type_of_employment=='Casual' %}selected{% endif %}>Casual</option>
+            <option value="Fixed Term" {% if payroll.type_of_employment=='Fixed Term' %}selected{% endif %}>Fixed Term</option>
+          </select>
+        </div>
+        <div class="col-md-4" id="hours_div" {% if not payroll.minimum_hours %}style="display:none"{% endif %}>
+          <label for="hours" class="form-label">If yes, how many:</label>
+          <input type="number" id="hours" name="hours" class="form-control"
+                 value="{{ payroll.hours or '' }}">
+        </div>
+        <div class="col-md-4">
+          <label for="bank_account_details" class="form-label">Bank Account Details</label>
+          <input type="text" id="bank_account_details" name="bank_account_details"
+                 class="form-control" value="{{ payroll.bank_account_details or '' }}">
+        </div>
+
+        <!-- ONBOARDING / OFFBOARDING -->
+        <div class="col-12 section-header" id="section-onboarding">Onboarding / Offboarding</div>
+        <div class="col-md-4">
+          <label for="onboarding_start_date" class="form-label">Onboarding Start</label>
+          <input type="date" id="onboarding_start_date" name="onboarding_start_date"
+                 class="form-control" value="{{ user.onboarding_start_date or '' }}">
+        </div>
+        <div class="col-md-4">
+          <label for="offboarding_end_date" class="form-label">Offboarding End</label>
+          <input type="date" id="offboarding_end_date" name="offboarding_end_date"
+                 class="form-control" value="{{ user.offboarding_end_date or '' }}">
+        </div>
+        <div class="col-md-4">
+          <label for="create_onboarding_tasks" class="form-label">Create Onboarding Tasks?</label>
+          <select id="create_onboarding_tasks" name="create_onboarding_tasks" class="form-select">
+            <option value="no" {% if not user.onboarding_start_date %}selected{% endif %}>No</option>
+            <option value="yes" {% if user.onboarding_start_date %}selected{% endif %}>Yes</option>
+          </select>
+        </div>
+
+        {% endif %}  {# ← closes the “if current_user.is_admin” opened above #}
+
+        <!-- SUBMIT (visible to everybody) -->
+        <div class="col-12 mt-3 text-center">
+          <button type="submit" class="btn btn-primary btn-lg">💾 Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 
 <!-- Loading Spinner -->
 <div id="loadingSpinnerContainer" class="loading-spinner-container" style="display: none;">
-    <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">Loading...</span>
-    </div>
+  <div class="spinner-border text-primary" role="status">
+    <span class="visually-hidden">Loading...</span>
+  </div>
 </div>
-
 <style>
-.loading-spinner-container {
+  .loading-spinner-container {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: rgba(255, 255, 255, 0.8);
+    background-color: rgba(255,255,255,0.8);
     z-index: 9999;
-}
-#reports_to {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 100%;
-    }
+  }
 </style>
 
+
 <script>
-document.getElementById('link_to_envision').addEventListener('click', function() {
-    const crewCode = document.getElementById('crew_code').value;
-    const loadingSpinnerContainer = document.getElementById('loadingSpinnerContainer');
-    loadingSpinnerContainer.style.display = 'flex'; // Show loading spinner
-
-    if (crewCode) {
-        fetch(`/v1/Employees?crew_code=${crewCode}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data && data.length > 0) {
-                    const employee = data.find(emp => emp.employeeNo === crewCode);
-                    if (employee) {
-                        document.getElementById('employee_id').value = employee.id;
-                        // Save employee_id to the database
-                        fetch(`/save_employee_id`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ crew_code: crewCode, employee_id: employee.id })
-                        })
-                        .then(response => response.json())
-                        .then(saveData => {
-                            if (saveData.success) {
-                                alert('User successfully linked to Envision.');
-                                // Call the function to assign roles based on skills
-                                fetch(`/assign_roles_based_on_skills?crew_code=${crewCode}`)
-                                    .then(response => response.json())
-                                    .then(data => {
-                                        console.log('Response from assign_roles_based_on_skills:', data); // Log the response data
-                                        loadingSpinnerContainer.style.display = 'none'; // Hide loading spinner
-                                        if (data.success) {
-                                            alert('Roles successfully assigned based on skills.');
-                                            // Update roles dynamically
-                                            const rolesList = document.getElementById('rolesList');
-                                            rolesList.innerHTML = ''; // Clear existing roles
-                                            data.roles.forEach(role => {
-                                                const li = document.createElement('li');
-                                                li.className = 'list-group-item';
-                                                li.textContent = role.role_name;
-                                                rolesList.appendChild(li);
-                                            });
-                                        } else {
-                                            alert('Failed to assign roles based on skills.');
-                                            console.error('Error details:', data.message); // Log error details
-                                        }
-                                    })
-                                    .catch(error => {
-                                        loadingSpinnerContainer.style.display = 'none'; // Hide loading spinner
-                                        console.error('Error assigning roles based on skills:', error);
-                                        alert('Error assigning roles based on skills.');
-                                    });
-                            } else {
-                                loadingSpinnerContainer.style.display = 'none'; // Hide loading spinner
-                                alert('Failed to save employee ID.');
-                            }
-                        })
-                        .catch(error => {
-                            loadingSpinnerContainer.style.display = 'none'; // Hide loading spinner
-                            console.error('Error saving employee ID:', error);
-                            alert('Error saving employee ID.');
-                        });
-                    } else {
-                        loadingSpinnerContainer.style.display = 'none'; // Hide loading spinner
-                        alert('No matching employee found.');
-                    }
-                } else {
-                    loadingSpinnerContainer.style.display = 'none'; // Hide loading spinner
-                    alert('No data returned from API.');
-                }
-            })
-            .catch(error => {
-                loadingSpinnerContainer.style.display = 'none'; // Hide loading spinner
-                console.error('Error fetching employee data:', error);
-                alert('Error fetching employee data.');
-            });
-    } else {
-        loadingSpinnerContainer.style.display = 'none'; // Hide loading spinner
-        alert('Please enter a crew code.');
-    }
-});
-
-document.addEventListener("DOMContentLoaded", function() {
-    toggleAuthFields();
-});
-
 function toggleAuthFields() {
-    var authType = document.getElementById("auth_type").value;
-    var passwordField = document.getElementById("passwordField");
-    var envisionFields = document.getElementById("envisionFields");
-
-    if (authType === "local") {
-        passwordField.style.display = "block";  // Show password field
-        envisionFields.style.display = "none";  // Hide Envision fields
-    } else {
-        passwordField.style.display = "none";   // Hide password field
-        envisionFields.style.display = "block"; // Show Envision fields
-    }
-}
-function updateReportsTo() {
-    let jobTitleDropdown = document.getElementById("job_title");
-    let selectedOption = jobTitleDropdown.options[jobTitleDropdown.selectedIndex];
-
-    let reportsToField = document.getElementById("reports_to");
-    let reportsToValue = (selectedOption.getAttribute("data-reports-to") || "Not Assigned").trim();
-    let managerValue = (selectedOption.getAttribute("data-manager") || "No Manager Assigned").trim();
-
-    reportsToField.value = `${reportsToValue} - ${managerValue}`.trim();
+  const authType = document.getElementById("auth_type").value;
+  document.getElementById("passwordField").style.display = authType==="local" ? "block" : "none";
+  document.getElementById("envisionFields").style.display = authType==="envision" ? "flex" : "none";
 }
 
+function linkToEnvisionHandler() {
+  const crewCode = document.getElementById("crew_code").value.trim();
+  const spinner = document.getElementById("loadingSpinnerContainer");
+  if (!crewCode) return alert("Please enter a crew code.");
+  spinner.style.display = "flex";
+
+  fetch(`/v1/Employees?crew_code=${encodeURIComponent(crewCode)}`)
+    .then(res => res.json())
+    .then(data => {
+      if (!Array.isArray(data)||!data.length) throw new Error("No data returned from API.");
+      const emp = data.find(e => e.employeeNo===crewCode);
+      if (!emp) throw new Error("No matching employee found.");
+      document.getElementById("employee_id").value=emp.id;
+      return fetch("/save_employee_id", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({crew_code:crewCode,employee_id:emp.id})
+      });
+    })
+    .then(res=>res.json())
+    .then(saveData=>{
+      if(!saveData.success)throw new Error(saveData.message||"Failed to save employee ID.");
+      alert("User successfully linked to Envision.");
+      return fetch(`/assign_roles_based_on_skills?crew_code=${encodeURIComponent(crewCode)}`);
+    })
+    .then(res=>res.json())
+    .then(roleData=>{
+      spinner.style.display="none";
+      if(!roleData.success) return alert("Failed to assign roles based on skills.");
+      alert("Roles successfully assigned based on skills.");
+      const list=document.getElementById("rolesList");
+      list.innerHTML="";
+      roleData.roles.forEach(r=>{
+        const li=document.createElement("li");
+        li.className="list-group-item"; li.textContent=r.role_name;
+        list.appendChild(li);
+      });
+    })
+    .catch(err=>{
+      spinner.style.display="none";
+      console.error(err);
+      alert(err.message||"Error linking to Envision.");
+    });
+}
+
+function updateManagerDisplay() {
+  const sel = document.getElementById("job_title_id");
+  const manager = sel.options[sel.selectedIndex].getAttribute("data-manager");
+  document.getElementById("job_manager").value = manager || "—";
+}
+
+
+document.addEventListener("DOMContentLoaded", ()=>{
+  toggleAuthFields();
+  const btn=document.getElementById("link_to_envision");
+  if(btn)btn.addEventListener("click", linkToEnvisionHandler);
+  document.getElementById("job_title_id").addEventListener("change",updateManagerDisplay);
+});
 </script>
 {% endblock %}

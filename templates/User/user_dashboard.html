@@ -3,150 +3,217 @@
 {% block title %}User Dashboard{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-        <h1>Welcome, {{ current_user.username }}</h1>
-    <div class="row mt-4">
-        <!-- Main Content: Courses and User Dashboard -->
-        <div class="col-lg-8">
-
-
-            {% if upcoming_courses %}
-                <h2>New Courses</h2>
-                <ul class="list-group mb-3">
-                    {% for course in upcoming_courses %}
-                    <li class="list-group-item">
-                        <strong>{{ course.title }}</strong>
-                        <p>{{ course.description }}</p>
-                        <a href="{{ url_for('course.view_course', course_id=course.id) }}" class="btn btn-primary btn-sm">Start Course</a>
-                    </li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p>No new courses available.</p>
+<div class="container py-5">
+    <h1 class="mb-4 display-5">Welcome, {{ current_user.username }}!</h1>
+    {% if pending_tasks %}
+    <section class="mb-5">
+      <h2 class="h4 mb-3 text-warning">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>Pending HR Tasks
+      </h2>
+      <ul class="list-group">
+        {% for t in pending_tasks %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <div>
+            <strong>{{ t.task_template.name }}</strong>
+            {% if t.due_date %}
+              <small class="text-muted">— due {{ t.due_date|human_date }}</small>
             {% endif %}
-            
-            {% if optional_courses %}
-                <h2 class="text-success">Optional Courses</h2>
-                <div class="alert alert-success p-3">
-                    <ul class="list-group">
-                        {% for course in optional_courses %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center success-highlight">
-                            <div>
-                                <strong>{{ course.title }}</strong>
-                                <p class="mb-1">{{ course.description }}</p>
-                            </div>
-                            <a href="{{ url_for('course.view_course', course_id=course.id) }}" class="btn btn-info btn-sm">View Course</a>
-                        </li>
-                        {% endfor %}
-                    </ul>
+          </div>
+    
+          {# if it’s a document‐type task, link to your upload form #}
+          {% if t.task_template.document_type %}
+          <a href="{{ url_for('document.upload_document',task_id=t.id,document_type=t.task_template.document_type_id) }}"class="btn btn-sm btn-outline-primary">Complete</a>
+          {% else %}
+            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                    data-bs-target="#signOffModal"
+                    data-userid="{{ t.user_id }}"
+                    data-templateid="{{ t.task_template.id }}"
+                    data-taskname="{{ t.task_template.name }}"
+                    data-description="{{ t.task_template.description|e }}">
+              Sign Off
+            </button>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+    
+    <!-- New Courses Section -->
+    {% if upcoming_courses %}
+    <section class="mb-5">
+        <h2 class="h4 mb-3 text-primary">
+            <i class="bi bi-plus-circle-fill me-2"></i>New Courses
+        </h2>
+        <div class="row row-cols-1 row-cols-md-2 g-4">
+            {% for course in upcoming_courses %}
+            <div class="col">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title">{{ course.title }}</h5>
+                        <p class="card-text flex-grow-1 text-muted">{{ course.description }}</p>
+                        <a href="{{ url_for('course.view_course', course_id=course.id) }}" class="btn btn-primary mt-3 align-self-start">
+                            <i class="bi bi-play-fill me-1"></i>Start Course
+                        </a>
+                    </div>
                 </div>
-            {% endif %}
-            
-            {% if renewable_soon_courses %}
-            <h2 class="text-info">Courses Expiring Soon (Within 30 Days)</h2>
-            <div class="alert alert-info p-3">
-                <ul class="list-group">
-                    {% for course in renewable_soon_courses %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong>{{ course['course'].title }}</strong>
-                            <p class="mb-1">Expires on: <span class="fw-bold">{{ course['expiry_date'].strftime('%A %d-%b-%Y') }}</span></p>
-                        </div>
-                        <a href="{{ url_for('course.view_course', course_id=course['course'].id) }}" class="btn btn-outline-primary btn-sm">Renew Now</a>
-                    </li>
-                    {% endfor %}
-                </ul>
             </div>
-        {% endif %}
-        
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
 
-            {% if expired_courses %}
-                <h2 class="text-danger">Expired Courses</h2>
-                <div class="alert alert-danger p-3">
-                    <ul class="list-group">
-                        {% for expired_course in expired_courses %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
+    <!-- Optional Courses Section -->
+    {% if optional_courses %}
+    <section class="mb-5">
+        <h2 class="h4 mb-3 text-success">
+            <i class="bi bi-star-fill me-2"></i>Optional Courses
+        </h2>
+        <div class="row row-cols-1 row-cols-md-2 g-4">
+            {% for course in optional_courses %}
+            <div class="col">
+                <div class="card border-success h-100">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title">{{ course.title }}</h5>
+                        <p class="card-text text-muted mb-4">{{ course.description }}</p>
+                        <a href="{{ url_for('course.view_course', course_id=course.id) }}" class="btn btn-outline-success mt-auto">
+                            <i class="bi bi-eye-fill me-1"></i>View Course
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Expiring Soon Section -->
+    {% if renewable_soon_courses %}
+    <section class="mb-5">
+        <h2 class="h4 mb-3 text-info">
+            <i class="bi bi-clock-fill me-2"></i>Expiring Soon
+        </h2>
+        <div class="row row-cols-1 row-cols-md-2 g-4">
+            {% for item in renewable_soon_courses %}
+            <div class="col">
+                <div class="card h-100 border-info shadow-sm">
+                    <div class="card-body d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title mb-1">{{ item.course.title }}</h5>
+                            <small class="text-info">
+                                Expires on {{ item.expiry_date.strftime('%A %d %B %Y') }}
+                            </small>
+                        </div>
+                        <a href="{{ url_for('course.view_course', course_id=item.course.id) }}" class="btn btn-outline-info">
+                            Renew Now
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Expired Courses Section -->
+    <section class="mb-5">
+        <h2 class="h4 mb-3 text-danger">
+            <i class="bi bi-exclamation-circle-fill me-2"></i>Expired Courses
+        </h2>
+        {% if expired_courses %}
+        <div class="row row-cols-1 row-cols-md-2 g-4">
+            {% for item in expired_courses %}
+            <div class="col">
+                <div class="card h-100 border-danger bg-light">
+                    <div class="card-body d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title mb-1">{{ item.course.title }}</h5>
+                            <small class="text-danger">
+                                Expired on {{ item.expiry_date.strftime('%A %d %B %Y') }}
+                            </small>
+                        </div>
+                        <a href="{{ url_for('course.view_course', course_id=item.course.id) }}" class="btn btn-warning">
+                            Review
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted">No expired courses at the moment.</p>
+        {% endif %}
+    </section>
+
+    <!-- User Info Accordion: Completed & Qualifications -->
+    <div class="accordion mb-5" id="userInfoAccordion">
+
+        <!-- Completed Courses Accordion Item -->
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="headingCompleted">
+                <button class="accordion-button collapsed bg-light text-muted" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseCompleted" aria-expanded="false" aria-controls="collapseCompleted">
+                    <i class="bi bi-check-circle me-2"></i>Completed Courses
+                </button>
+            </h2>
+            <div id="collapseCompleted" class="accordion-collapse collapse" aria-labelledby="headingCompleted"
+                 data-bs-parent="#userInfoAccordion">
+                <div class="accordion-body">
+                    {% if all_completed_courses %}
+                    <ul class="list-unstyled mb-0">
+                        {% for c in all_completed_courses %}
+                        <li class="mb-3 d-flex justify-content-between align-items-center">
                             <div>
-                                <strong>{{ expired_course['course'].title }}</strong>
-                                <p class="mb-1">Expired on: <span class="fw-bold">{{ expired_course['expiry_date'].strftime('%A %d-%b-%Y') }}</span></p>
+                                <strong>{{ c.course.title }}</strong><br>
+                                <small class="text-muted">
+                                    Expiry: {{ c.expiry_date.strftime('%A %d %B %Y') if c.expiry_date else 'N/A' }}
+                                </small>
                             </div>
-                            <a href="{{ url_for('course.view_course', course_id=expired_course['course'].id) }}" class="btn btn-warning btn-sm">Review Course</a>
+                            {% if c.certificate_path %}
+                            <a href="{{ url_for('view_certificate', attempt_id=c.attempt_id) }}" class="btn btn-sm btn-outline-secondary">
+                                Certificate
+                            </a>
+                            {% endif %}
                         </li>
                         {% endfor %}
                     </ul>
+                    {% else %}
+                    <p class="text-muted mb-0">You haven't completed any courses yet.</p>
+                    {% endif %}
                 </div>
-            {% else %}
-                <p>No expired courses.</p>
-            {% endif %}
+            </div>
         </div>
 
-        <!-- Sidebar: Completed Courses and Qualifications -->
-        <div class="col-lg-4">
-            {% if all_completed_courses %}
-                <div class="card mb-4">
-                    <div class="card-header bg-primary text-white">
-                        <h4>Completed Courses</h4>
-                    </div>
-                    <div class="card-body">
-                        <ul class="list-group">
-                            {% for course_data in all_completed_courses %}
-                            <li class="list-group-item">
-                                <strong>{{ course_data.course.title }}</strong>
-                                <br>
-                                <small>
-                                    Expiry Date: 
-                                    {% if course_data.expiry_date %}
-                                        {{ course_data.expiry_date.strftime('%A %d-%b-%Y') }}
-                                    {% else %}
-                                        N/A
-                                    {% endif %}
-                                </small>
-                                <br>
-                                {% if course_data.certificate_path %}
-                                    <a href="{{ url_for('view_certificate', attempt_id=course_data.attempt_id) }}" class="btn btn-success btn-sm mt-2">View Certificate</a>
-                                {% endif %}
-                            </li>
-                            {% endfor %}
-                        </ul>
-                    </div>
+        <!-- Qualifications Accordion Item -->
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="headingQualifications">
+                <button class="accordion-button collapsed bg-light text-muted" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseQualifications" aria-expanded="false" aria-controls="collapseQualifications">
+                    <i class="bi bi-award-fill me-2"></i>Qualifications
+                </button>
+            </h2>
+            <div id="collapseQualifications" class="accordion-collapse collapse" aria-labelledby="headingQualifications"
+                 data-bs-parent="#userInfoAccordion">
+                <div class="accordion-body">
+                    {% if qualifications %}
+                    <ul class="list-unstyled mb-0">
+                        {% for qual in qualifications %}
+                        <li class="mb-3">
+                            <strong>{{ qual.qualification }}</strong><br>
+                            <small class="text-muted">
+                                Valid: {{ qual.valid_from.strftime('%d %b %Y') }}
+                                {% if qual.valid_to %}&ndash; {{ qual.valid_to.strftime('%d %b %Y') }}{% endif %}
+                            </small>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted mb-0">No qualifications recorded.</p>
+                    {% endif %}
                 </div>
-            {% else %}
-                <p>No completed courses available.</p>
-            {% endif %}
-
-            <!-- Display qualifications -->
-            {% if qualifications %}
-                <div class="card">
-                    <div class="card-header bg-primary text-white">
-                        <h4>Qualifications</h4>
-                    </div>
-                    <div class="card-body">
-                        <ul class="list-group">
-                            {% for qualification in qualifications %}
-                            <li class="list-group-item">
-                                <strong>{{ qualification.qualification }}</strong>
-                                <br>
-                                <small>
-                                    Valid From: {{ qualification.valid_from.strftime('%A %d-%b-%Y') }}
-                                </small>
-                                <br>
-                                <small>
-                                    Valid To: 
-                                    {% if qualification.valid_to %}
-                                        {{ qualification.valid_to.strftime('%A %d-%b-%Y') }}
-                                    {% else %}
-                                        N/A
-                                    {% endif %}
-                                </small>
-                            </li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </div>
-            {% else %}
-                <p>No qualifications available.</p>
-            {% endif %}
+            </div>
         </div>
+
     </div>
 </div>
 {% endblock %}

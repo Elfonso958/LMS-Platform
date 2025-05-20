@@ -115,6 +115,12 @@
             </tbody>
         </table>
     </div>
+    <div class="mb-4">
+        <button id="bulkLinkBtn" class="btn btn-primary">
+          🔗 Bulk-Link All Users to Envision
+        </button>
+      </div>
+      <ul id="bulkLinkReport" class="list-group"></ul>
 
     <!-- Add User Modal with Tabbed Form -->
     <div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
@@ -393,7 +399,53 @@
 
     reportsToField.value = `${reportsToValue} - ${managerValue}`.trim();
 }
-
+    document.getElementById('bulkLinkBtn').addEventListener('click', () => {
+        const btn = document.getElementById('bulkLinkBtn');
+        btn.disabled = true;
+        btn.textContent = 'Linking…';
+    
+        fetch('/bulk_link_envision', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.textContent = '🔗 Bulk-Link All Users to Envision';
+    
+            const report = document.getElementById('bulkLinkReport');
+            report.innerHTML = '';  // clear
+    
+            if (data.success) {
+            // Summary
+            const summary = document.createElement('li');
+            summary.className = 'list-group-item list-group-item-success';
+            summary.textContent = `✅ Linked ${data.linked_count} users.`;
+            report.appendChild(summary);
+    
+            // Each username
+            data.linked_users.forEach(username => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item';
+                li.textContent = username;
+                report.appendChild(li);
+            });
+            } else {
+            const li = document.createElement('li');
+            li.className = 'list-group-item list-group-item-danger';
+            li.textContent = '❌ ' + (data.message || 'Bulk link failed');
+            report.appendChild(li);
+            }
+        })
+        .catch(err => {
+            btn.disabled = false;
+            btn.textContent = '🔗 Bulk-Link All Users to Envision';
+            const report = document.getElementById('bulkLinkReport');
+            report.innerHTML = '';
+            const li = document.createElement('li');
+            li.className = 'list-group-item list-group-item-danger';
+            li.textContent = '❌ Network error. See console.';
+            report.appendChild(li);
+            console.error(err);
+        });
+    });
 </script>
 
 {% endblock %}

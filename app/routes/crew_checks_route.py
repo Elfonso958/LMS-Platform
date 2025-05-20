@@ -49,95 +49,167 @@ crew_checks_bp = Blueprint("crew_checks", __name__)
 
 ENVISION_AUTH_URL = "https://envision.airchathams.co.nz:8790/v1/Authenticate"
 
+import json
+
 @crew_checks_bp.route('/crew_checks_dashboard')
 @login_required
 def crew_checks_dashboard():
-    required_roles = {'Training Team', 'SF34 Examiner', 'ATR72 Examiner'}
+    required_roles = {'Training Team', 'SF34 Examiner', 'ATR72 Examiner','Part 121 Examiner'}
     user_roles = {role.role_name for role in current_user.roles}
 
+    # Permission guard
     if not current_user.is_admin and not required_roles.intersection(user_roles):
         flash("You do not have permission to access this page.", "danger")
-        return redirect(url_for('user_dashboard'))
-    # Debug: Print the current user's roles
-    user_roles = [role.role_name for role in current_user.roles]
-    # Fetch all crew checks from the database
-    crew_checks = CrewCheck.query.order_by(CrewCheck.created_at.desc()).all()
-    # Fetch all LineTrainingForm objects from the database
+        return redirect(url_for('user.user_dashboard'))
+
+    # Fetch all active and archived crew-check templates
+    active_checks = (
+        CrewCheck.query
+        .filter_by(is_active=True)
+        .order_by(CrewCheck.created_at.desc())
+        .all()
+    )
+    archived_checks = (
+        CrewCheck.query
+        .filter_by(is_active=False)
+        .order_by(CrewCheck.created_at.desc())
+        .all()
+    )
+    
+    # Annotate each active template with whether it has any completed forms
+    for cc in active_checks:
+        cc.has_completed = (
+            db.session.query(CrewCheckMeta.id)
+            .filter_by(crew_check_id=cc.id, is_complete=True)
+            .first() is not None
+        )
+
+    # ===== Decode visible_headers into a real list for JSON serialization =====
+    for cc in active_checks + archived_checks:
+        try:
+            cc._visible_headers_cache = json.loads(cc.visible_headers or '[]')
+        except ValueError:
+            cc._visible_headers_cache = []
+    # ==========================================================================
+
+    # Other context data
     line_training_forms = LineTrainingForm.query.all()
-    # Create a form instance (for editing or displaying data)
-    form = LineTrainingFormEditForm()  # Empty form, used for creating or editing line training forms
-    roles = RoleType.query.all()
-    return render_template('crew_checks/crew_checks_dashboard.html', crew_checks=crew_checks, line_training_forms=line_training_forms, form=form, roles=roles, all_fields=CREW_CHECK_FIELDS)
+    form                = LineTrainingFormEditForm()
+    roles               = RoleType.query.all()
 
-@crew_checks_bp.route('/create_crew_check', methods=['GET', 'POST'])
+    return render_template(
+        'crew_checks/crew_checks_dashboard.html',
+        crew_checks=active_checks,
+        archived_checks=archived_checks,
+        line_training_forms=line_training_forms,
+        form=form,
+        roles=roles,
+        all_fields=CREW_CHECK_FIELDS
+    )
+
+
+@crew_checks_bp.route('/create_crew_check', methods=['POST'])
 @login_required
-@admin_required
+@roles_required('Training Team', 'Admin')
 def create_crew_check():
-    if request.method == 'POST':
-        name = request.form.get('name')
-        role_ids = request.form.getlist('roles')  # List of role IDs
+    name        = request.form.get('name','').strip()
+    role_ids    = request.form.getlist('roles')
+    header_keys = request.form.getlist('headers')
 
-        new_check = CrewCheck(name=name)
-        db.session.add(new_check)
-        db.session.flush()  # Ensure new_check.id is available
+    if not header_keys:
+        flash('Please select at least one Visible Header.', 'warning')
+        # render same dashboard so our “reopen” JS kicks in
+        return crew_checks_dashboard()
 
-        # Add roles to the check
-        for role_id in role_ids:
-            role = RoleType.query.get(role_id)
-            if role:
-                new_check.roles.append(role)
+    # save check
+    new = CrewCheck(name=name, visible_headers=json.dumps(header_keys))
+    db.session.add(new)
+    db.session.flush()
+    for rid in role_ids:
+        role = RoleType.query.get(rid)
+        if role:
+            new.roles.append(role)
+    db.session.commit()
 
-        db.session.commit()
-        flash('Crew Check created successfully!', 'success')
-        return redirect(url_for('crew_checks.crew_checks_dashboard'))
+    flash('Crew Check created successfully!', 'success')
+    return redirect(url_for('crew_checks.crew_checks_dashboard'))
 
-    roles = RoleType.query.all()  # Get all roles
-    return render_template('crew_checks/create_crew_check.html', roles=roles)
-
-@crew_checks_bp.route('/edit_crew_check/<int:crew_check_id>', methods=['GET', 'POST'])
+@crew_checks_bp.route('/edit_crew_check/<int:crew_check_id>', methods=['POST'])
 @login_required
-@admin_required
+@roles_required('Training Team', 'Admin')
 def edit_crew_check(crew_check_id):
     crew_check = CrewCheck.query.get_or_404(crew_check_id)
+    required_headers = {'test_result', 'next_check_due'}
+    selected_headers = set(request.form.getlist('headers'))
 
-    if request.method == 'POST':
-        crew_check.name = request.form.get('name')
-        role_ids = request.form.getlist('roles')  # List of role IDs
-
-        # Update roles
-        crew_check.roles = []
-        for role_id in role_ids:
-            role = RoleType.query.get(role_id)
-            if role:
-                crew_check.roles.append(role)
-
-        # ✅ Save selected headers
-        selected_headers = request.form.getlist('headers')
-        crew_check.visible_headers = json.dumps(selected_headers)
-
-        db.session.commit()
-        flash('Crew Check updated successfully!', 'success')
+    if not required_headers.issubset(selected_headers):
+        flash("You must include 'Test Result' and 'Next Check Due' headers.", "danger")
         return redirect(url_for('crew_checks.crew_checks_dashboard'))
 
+    crew_check.name = request.form.get('name')
+    role_ids = request.form.getlist('roles')
 
-    roles = RoleType.query.all()  # Get all roles
-    return render_template('edit_crew_check.html', crew_check=crew_check, roles=roles)
+    # Update roles
+    crew_check.roles = []
+    for role_id in role_ids:
+        role = RoleType.query.get(role_id)
+        if role:
+            crew_check.roles.append(role)
+
+    # Save visible headers
+    crew_check.visible_headers = json.dumps(list(selected_headers))
+
+    db.session.commit()
+    flash('Crew Check updated successfully!', 'success')
+    return redirect(url_for('crew_checks.crew_checks_dashboard'))
+
+
 
 @crew_checks_bp.route('/delete_crew_check/<int:crew_check_id>', methods=['POST'])
 @login_required
-@admin_required
+@roles_required('Training Team', 'Admin')
 def delete_crew_check(crew_check_id):
-    """Allows admins to delete a crew check."""
-    check = CrewCheck.query.get_or_404(crew_check_id)
+    crew_check = CrewCheck.query.get_or_404(crew_check_id)
 
-    try:
-        db.session.delete(check)
-        db.session.commit()
-        flash(f'Crew check "{check.name}" deleted successfully.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        flash(f"Error deleting crew check: {str(e)}", "danger")
+    # Block if any completed checks exist
+    has_completed = CrewCheckMeta.query\
+        .filter_by(crew_check_id=crew_check_id, is_complete=True)\
+        .count() > 0
+    if has_completed:
+        flash("Cannot delete this check — completed forms exist.", "danger")
+        return redirect(url_for('crew_checks.crew_checks_dashboard'))
 
+    # Safe to delete (no completed forms)
+    db.session.delete(crew_check)
+    db.session.commit()
+    flash(f'Crew Check "{crew_check.name}" deleted successfully.', 'success')
+    return redirect(url_for('crew_checks.crew_checks_dashboard'))
+
+@crew_checks_bp.route('/archive_crew_check/<int:crew_check_id>', methods=['POST'])
+@login_required
+@roles_required('Training Team', 'Admin')
+def archive_crew_check(crew_check_id):
+    """
+    Soft-archive a CrewCheck template regardless of completed forms.
+    """
+    crew_check = CrewCheck.query.get_or_404(crew_check_id)
+
+    # Mark it inactive instead of deleting
+    crew_check.is_active = False
+    db.session.commit()
+
+    flash(f'Crew Check "{crew_check.name}" archived successfully.', 'success')
+    return redirect(url_for('crew_checks.crew_checks_dashboard'))
+
+@crew_checks_bp.route('/restore_crew_check/<int:crew_check_id>', methods=['POST'])
+@login_required
+@roles_required('Training Team', 'Admin')
+def restore_crew_check(crew_check_id):
+    """Re-activate a previously archived Crew Check template."""
+    crew_check = CrewCheck.query.get_or_404(crew_check_id)
+    crew_check.is_active = True
+    db.session.commit()
+    flash(f'Crew Check "{crew_check.name}" restored successfully.', 'success')
     return redirect(url_for('crew_checks.crew_checks_dashboard'))
 
 # Crew Check Items
@@ -271,7 +343,7 @@ def update_check_item_order():
 #########################################
 @crew_checks_bp.route('/delete_check_meta/<int:meta_id>', methods=['POST'])
 @login_required
-@admin_required
+@roles_required('Training Team', 'Admin')
 def delete_check_meta(meta_id):
     check_meta = CrewCheckMeta.query.get_or_404(meta_id)
     if check_meta.is_complete:
@@ -343,48 +415,71 @@ def get_candidate_details(candidate_id):
 def crew_check_form(crew_check_id):
     today = datetime.today().strftime('%Y-%m-%d')
     crew_check = CrewCheck.query.get_or_404(crew_check_id)
-    # Get the role IDs assigned to this crew check
-    assigned_role_ids = [role.roleID for role in crew_check.roles]
-    # Only fetch users who have at least one of the assigned roles
-    all_candidates = (
-    User.query
-    .join(User.roles)
-    .filter(RoleType.roleID.in_(assigned_role_ids))
-    .filter(User.is_active == True)  # Exclude archived users
-    .distinct()
-    .all()
-    )
 
-    check_items = CheckItem.query.filter_by(crew_check_id=crew_check_id).order_by(CheckItem.order).all()
-
-    draft_id = request.args.get('draft_id', type=int)
+    # Look for an existing draft or submission
+    draft_id   = request.args.get('draft_id', type=int)
     check_meta = CrewCheckMeta.query.get(draft_id) if draft_id else None
 
+    # Load check items:
+    #  • If the form has been SUBMITTED (is_complete=True), freeze to its template_version
+    #  • Otherwise (new form or INCOMPLETE draft), show only non-deleted items
+    if check_meta and check_meta.is_complete:
+        max_v = check_meta.template_version
+        check_items = (
+            CheckItem.query
+                .filter_by(crew_check_id=crew_check_id)
+                .filter(CheckItem.version <= max_v)
+                .order_by(CheckItem.order)
+                .all()
+        )
+    else:
+        check_items = (
+            CheckItem.query
+                .filter_by(crew_check_id=crew_check_id, deleted=False)
+                .order_by(CheckItem.order)
+                .all()
+        )
+
+    # Fetch eligible candidates
+    assigned_role_ids = [r.roleID for r in crew_check.roles]
+    all_candidates = (
+        User.query
+            .join(User.roles)
+            .filter(RoleType.roleID.in_(assigned_role_ids))
+            .filter(User.is_active.is_(True))
+            .distinct()
+            .all()
+    )
+
+    # Optional pre-fill from querystring
     candidate_id = request.args.get('candidate_id', type=int)
-    form_id = request.args.get('form_id', type=int)
-    candidate = User.query.get(candidate_id) if candidate_id else None
+    form_id      = request.args.get('form_id',      type=int)
+    candidate    = User.query.get(candidate_id) if candidate_id else None
 
     candidate_data = {
-        "username": candidate.username if candidate else "",
-        "license_number": candidate.license_number if candidate else "",
-        "medical_expiry": candidate.medical_expiry.strftime('%Y-%m-%d') if candidate and candidate.medical_expiry else "",
-        "aircraft_type": "SF34",
+        "username":       candidate.username            if candidate else "",
+        "license_number": candidate.license_number      if candidate else "",
+        "medical_expiry": candidate.medical_expiry.strftime('%Y-%m-%d')
+                               if candidate and candidate.medical_expiry else "",
+        "aircraft_type":  "SF34",
     }
 
     visible_fields = json.loads(crew_check.visible_headers or "[]")
 
     if request.method == 'POST':
-        candidate_id_form = request.form.get('candidate_id')
-        if not candidate_id_form:
+        # Validate candidate selection
+        cid = request.form.get('candidate_id')
+        if not cid:
             return jsonify({'success': False, 'error': 'Candidate must be selected.'}), 400
         try:
-            candidate_id_form = int(candidate_id_form)
+            cid = int(cid)
         except ValueError:
             return jsonify({'success': False, 'error': 'Invalid candidate selection.'}), 400
-        candidate = User.query.get(candidate_id_form)
+        candidate = User.query.get(cid)
         if not candidate:
             return jsonify({'success': False, 'error': 'Selected candidate not found.'}), 404
 
+        # Create or load Meta record
         if check_meta:
             updated_meta = check_meta
         else:
@@ -393,22 +488,23 @@ def crew_check_form(crew_check_id):
 
         updated_meta.candidate_id = candidate.id
 
+        # Map visible header fields onto the meta
         field_map = {
-            "candidate_name": 'candidate_name',
-            "licence_type": 'licence_type',
-            "licence_number": 'licence_number',
-            "medical_expiry": 'medical_expiry',
-            "date_of_test": 'date_of_test',
-            "aircraft_type": 'aircraft_type',
-            "aircraft_registration": 'aircraft_registration',
-            "type_of_check": 'type_of_check',
-            "comments": 'comments',
-            "flight_times": 'flight_times',
-            "current_check_due": 'current_check_due',
-            "test_result": 'test_result',
-            "logbook_sticker_issued": 'logbook_sticker_issued',
-            "next_check_due": 'next_check_due',
-            "examiner_name": 'examiner_name',
+            "candidate_name":          'candidate_name',
+            "licence_type":            'licence_type',
+            "licence_number":          'licence_number',
+            "medical_expiry":          'medical_expiry',
+            "date_of_test":            'date_of_test',
+            "aircraft_type":           'aircraft_type',
+            "aircraft_registration":   'aircraft_registration',
+            "type_of_check":           'type_of_check',
+            "comments":                'comments',
+            "flight_times":            'flight_times',
+            "current_check_due":       'current_check_due',
+            "test_result":             'test_result',
+            "logbook_sticker_issued":  'logbook_sticker_issued',
+            "next_check_due":          'next_check_due',
+            "examiner_name":           'examiner_name',
             "examiner_license_number": 'examiner_license_number'
         }
 
@@ -418,30 +514,35 @@ def crew_check_form(crew_check_id):
             else:
                 setattr(updated_meta, attr, None)
 
+        # Handle flight_times subfields
         if 'flight_times' in visible_fields:
             try:
-                updated_meta.flight_time_day = int(request.form.get('flight_time_day', '0'))
+                updated_meta.flight_time_day   = int(request.form.get('flight_time_day',   '0'))
                 updated_meta.flight_time_night = int(request.form.get('flight_time_night', '0'))
-                updated_meta.flight_time_if = int(request.form.get('flight_time_if', '0'))
+                updated_meta.flight_time_if    = int(request.form.get('flight_time_if',    '0'))
             except ValueError:
                 updated_meta.flight_time_day = updated_meta.flight_time_night = updated_meta.flight_time_if = 0
         else:
             updated_meta.flight_time_day = updated_meta.flight_time_night = updated_meta.flight_time_if = None
 
+        # Stamp examiner info if first time
         if not updated_meta.is_complete:
-            updated_meta.examiner_name = current_user.username
+            updated_meta.examiner_name           = current_user.username
             updated_meta.examiner_license_number = current_user.license_number
 
-        updated_meta.examiner_code = request.form.get('examiner_code')
+        # Always record codes
+        updated_meta.examiner_code  = request.form.get('examiner_code')
         updated_meta.candidate_code = request.form.get('candidate_code')
 
+        # Snapshot the current template version
         current_template_version = (
             db.session.query(func.max(CheckItem.version))
-            .filter_by(crew_check_id=crew_check.id)
-            .scalar()
+                .filter_by(crew_check_id=crew_check.id)
+                .scalar()
         ) or 1
         updated_meta.template_version = current_template_version
 
+        # Draft vs submit
         if 'save_draft' in request.form:
             updated_meta.is_complete = False
             flash('Crew check form saved as draft.', 'info')
@@ -451,55 +552,55 @@ def crew_check_form(crew_check_id):
 
         db.session.commit()
 
+        # Persist each grade/comment
         for item in check_items:
-            grade_value = request.form.get(f'grade_{item.id}')
-            comment_value = request.form.get(f'comment_{item.id}', '').strip()
-            comment_to_save = comment_value if comment_value else None
-
-            existing_grade = CheckItemGrade.query.filter_by(
+            grade_val   = request.form.get(f'grade_{item.id}')
+            comment_val = request.form.get(f'comment_{item.id}', '').strip() or None
+            existing = CheckItemGrade.query.filter_by(
                 crew_check_meta_id=updated_meta.id,
                 check_item_id=item.id
             ).first()
-
-            if grade_value:
-                if existing_grade:
-                    existing_grade.grade = grade_value
-                    existing_grade.grade_comment = comment_to_save
-                    existing_grade.grader_id = current_user.id
-                    existing_grade.graded_at = datetime.now()
+            if grade_val:
+                if existing:
+                    existing.grade         = grade_val
+                    existing.grade_comment = comment_val
+                    existing.grader_id     = current_user.id
+                    existing.graded_at     = datetime.now()
                 else:
-                    new_grade = CheckItemGrade(
+                    db.session.add(CheckItemGrade(
                         crew_check_meta_id=updated_meta.id,
                         check_item_id=item.id,
-                        grade=grade_value,
-                        grade_comment=comment_to_save,
+                        grade=grade_val,
+                        grade_comment=comment_val,
                         grader_id=current_user.id,
                         graded_at=datetime.now()
-                    )
-                    db.session.add(new_grade)
+                    ))
 
         db.session.commit()
 
+        # Send notification on final submit
         if updated_meta.is_complete:
             from app.email_utils import send_crew_check_email_to_training_team
-            send_crew_check_email_to_training_team(current_app._get_current_object(), updated_meta.id)
+            send_crew_check_email_to_training_team(
+                current_app._get_current_object(),
+                updated_meta.id
+            )
 
         return jsonify({'success': True, 'draft_id': updated_meta.id})
 
-    user_roles = [role.role_name for role in current_user.roles]
-
+    # GET / render
     return render_template(
         'crew_checks/crew_check_form.html',
         today=today,
         crew_check=crew_check,
-        candidate=candidate,
-        candidate_id=candidate_id,
         check_items=check_items,
         all_candidates=all_candidates,
+        candidate=candidate,
+        candidate_id=candidate_id,
         form_id=form_id,
         check_meta=check_meta,
         candidate_data=candidate_data,
-        user_roles=user_roles,
+        user_roles=[r.role_name for r in current_user.roles],
         visible_fields=visible_fields
     )
 
@@ -619,7 +720,7 @@ def checks():
     type_of_check_filter = request.args.get('type_of_check', 'all')
     sort_by = request.args.get('sort_by', 'date_of_test')
     order = request.args.get('order', 'asc')
-    required_roles = {'Training Team', 'SF34 Examiner', 'ATR72 Examiner'}
+    required_roles = {'Training Team', 'SF34 Examiner', 'ATR72 Examiner','Part 121 Examiner'}
     user_roles = {role.role_name for role in current_user.roles}
 
     # Fetch all candidates
@@ -727,3 +828,55 @@ def print_check(check_meta_id):
                     mimetype='application/pdf',
                     headers={'Content-Disposition': 'inline; filename="CrewCheckForm.pdf"'})
 
+from datetime import datetime
+
+@crew_checks_bp.route('/save_comment', methods=['POST'])
+@login_required
+def save_comment():
+    data      = request.get_json(silent=True) or {}
+    raw_item  = data.get('item_id')
+    raw_draft = data.get('draft_id')
+    comment   = data.get('comment', '').strip() or None
+    grade_val = data.get('grade')
+
+    # 1) Validate & cast IDs
+    try:
+        item_id  = int(raw_item)
+        draft_id = int(raw_draft)
+    except (TypeError, ValueError):
+        return jsonify(success=False, error="item_id and draft_id must be integers"), 400
+
+    # 2) Ensure we got a grade
+    if grade_val is None:
+        return jsonify(success=False, error="grade is required"), 400
+
+    # 3) Load the draft meta
+    meta = CrewCheckMeta.query.get(draft_id)
+    if not meta:
+        return jsonify(success=False, error="Draft not found"), 404
+
+    # 4) Upsert the CheckItemGrade
+    now = datetime.utcnow()
+    grade = CheckItemGrade.query.filter_by(
+        crew_check_meta_id=meta.id,
+        check_item_id=item_id
+    ).first()
+
+    if grade:
+        grade.grade         = grade_val
+        grade.grade_comment = comment
+        grade.grader_id     = current_user.id
+        grade.graded_at     = now
+    else:
+        grade = CheckItemGrade(
+            crew_check_meta_id = meta.id,
+            check_item_id      = item_id,
+            grade              = grade_val,
+            grade_comment      = comment,
+            grader_id          = current_user.id,
+            graded_at          = now
+        )
+        db.session.add(grade)
+
+    db.session.commit()
+    return jsonify(success=True)

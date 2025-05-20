@@ -62,6 +62,27 @@
                                 {% endfor %}
                             </div>
                         </details>
+                       <!-- Job Title Access -->
+                        <details>
+                            <summary class="mb-2 text-muted">Toggle Job Title Access</summary>
+                            <div class="row g-2 px-2 mb-3" style="max-height: 300px; overflow-y: auto;">
+                                {% for job in all_job_titles %}
+                                <div class="col-md-4 col-lg-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input job-checkbox"
+                                        type="checkbox"
+                                        data-nav-id="{{ nav_item.id }}"
+                                        data-job-id="{{ job.id }}"
+                                        value="{{ job.id }}"
+                                        {% if job.id in nav_item.allowed_job_ids %}checked{% endif %}>
+                                        <label class="form-check-label small">
+                                            {{ job.title }}
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </details>
 
                         {% if nav_item.children %}
                         <hr>
@@ -108,6 +129,25 @@
                                                     <label class="form-check-label small">
                                                         {{ role.role_name }}{% if role.roleID == -1 %} <small class="text-muted">(automatic)</small>{% endif %}
                                                     </label>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </details>
+                                    <!-- 🔽 Job Title Access for Child -->
+                                    <details>
+                                        <summary class="text-muted mt-3">Toggle Child Job Title Access</summary>
+                                        <div class="row g-2 px-2 mt-2" style="max-height: 250px; overflow-y: auto;">
+                                            {% for job in all_job_titles %}
+                                            <div class="col-md-4 col-lg-3">
+                                                <div class="form-check">
+                                                    <input class="form-check-input job-checkbox"
+                                                        type="checkbox"
+                                                        data-nav-id="{{ child.id }}"
+                                                        data-job-id="{{ job.id }}"
+                                                        value="{{ job.id }}"
+                                                        {% if job.id in child.allowed_job_ids %}checked{% endif %}>
+                                                    <label class="form-check-label small">{{ job.title }}</label>
                                                 </div>
                                             </div>
                                             {% endfor %}
@@ -271,6 +311,22 @@ document.addEventListener("DOMContentLoaded", function () {
             });
         });
     });
+});
+document.querySelectorAll('.job-checkbox').forEach(checkbox => {
+  checkbox.addEventListener('change', function () {
+    const navItemId = this.dataset.navId;
+    const jobId = this.dataset.jobId;
+    const action = this.checked ? 'add' : 'remove';
+
+    fetch("{{ url_for('admin.update_nav_job_permission_ajax') }}", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": "{{ csrf_token() if csrf_token is defined else '' }}"
+      },
+      body: JSON.stringify({ nav_item_id: navItemId, job_title_id: jobId, action: action })
+    });
+  });
 });
 </script>
 {% endblock %}

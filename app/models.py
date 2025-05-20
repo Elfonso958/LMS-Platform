@@ -77,7 +77,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(150), unique=True, nullable=False)
     crew_code = db.Column(db.String(150), unique=True, nullable=False)
     employee_id = db.Column(BIGINT(unsigned=True), unique=True, nullable=True)
-    email = db.Column(db.String(150), unique=True, nullable=False)
+    email = db.Column(db.String(150), unique=True, nullable=True)
     password = db.Column(db.String(150), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     phone_number = db.Column(db.String(20), nullable=True)
@@ -90,9 +90,11 @@ class User(UserMixin, db.Model):
     medical_expiry = db.Column(db.Date, nullable=True)  # Medical Expiry Date
     is_active = db.Column(db.Boolean, default=True)  # Field to archive users
     auth_type = db.Column(db.String(20), nullable=False, default='local')
+
     onboarding_start_date = db.Column(db.Date)
     offboarding_end_date = db.Column(db.Date)
-
+    completed_onboarding = db.Column(db.Boolean, default=False)
+    completed_offboarding = db.Column(db.Boolean, default=False)
     # ✅ Many-to-Many Relationship with RoleType
     roles = db.relationship('RoleType', secondary=user_role, back_populates='users')
 
@@ -257,7 +259,8 @@ class CrewCheck(db.Model):
     name = db.Column(db.String(100), nullable=False)  # Name of the check
     created_at = db.Column(db.DateTime, default=datetime.utcnow)  # Creation timestamp
     visible_headers = db.Column(db.Text, nullable=True)
-
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    
     # Relationships
     crew_check_metadata = db.relationship('CrewCheckMeta', back_populates='check', cascade='all, delete-orphan',overlaps="check_item_grades,crew_check_meta_relation")
     items = db.relationship('CheckItem', back_populates='crew_check', cascade='all, delete-orphan')
@@ -374,6 +377,10 @@ class LineTrainingForm(db.Model):
     name = db.Column(db.String(100), nullable=False)  # Name of the training form
     created_at = db.Column(db.DateTime, default=datetime.utcnow)  # Creation timestamp
 
+    # NEW: Thresholds for alerting
+    threshold_total_sectors = db.Column(db.String(255))  # e.g., "10,20,30"
+    threshold_total_hours = db.Column(db.String(255))    # e.g., "5.0,10.0,15.0"
+
     # Many-to-Many Relationship with RoleType
     roles = db.relationship('RoleType', secondary=line_training_form_role, back_populates='line_training_forms')
     items = db.relationship('LineTrainingItem', back_populates='line_training_form', lazy='dynamic')
@@ -480,7 +487,6 @@ class Sector(db.Model):
     notes = db.Column(db.String(200), nullable=True)
     note_creator_id = db.Column(BIGINT(unsigned=True), db.ForeignKey('user.id'), nullable=True)
     
-
     # Correct Relationship with UserLineTrainingForm
     form = db.relationship('UserLineTrainingForm', back_populates='sectors')
     note_creator = db.relationship('User', backref='notes_created', foreign_keys=[note_creator_id])
@@ -799,14 +805,13 @@ class NavItem(db.Model):
     parent = db.relationship('NavItem', remote_side=[id], backref='children')
     inherit_roles = db.Column(db.Boolean, default=False)
 
-
-
 class NavItemPermission(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nav_item_id = db.Column(db.Integer, db.ForeignKey('nav_item.id'), nullable=False)
-    role_id = db.Column(BIGINT(unsigned=True), db.ForeignKey('role_type.roleID'), nullable=False)
+    role_id = db.Column(BIGINT(unsigned=True), db.ForeignKey('role_type.roleID'), nullable=True)
+    job_title_id = db.Column(BIGINT(unsigned=True), db.ForeignKey('job_title.id'), nullable=True)
+    # Optionally in the future: skill_id = db.Column(db.Integer, db.ForeignKey('employee_skills.id'), nullable=True)
 
-# models.py
 class CrewAcknowledgement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     flight_id = db.Column(BIGINT(unsigned=True), db.ForeignKey('flight.id'), nullable=False)
@@ -845,12 +850,11 @@ class DocumentReviewRequest(db.Model):
 
 class DocumentType(db.Model):
     __tablename__ = 'document_types'
+    id             = db.Column(db.Integer, primary_key=True)
+    name           = db.Column(db.String(100), unique=True, nullable=False)
+    description    = db.Column(db.String(255), nullable=True)
+    pages_required = db.Column(db.Integer, nullable=False, default=1)
 
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), unique=True, nullable=False)  # e.g., 'Medical', 'Passport'
-    description = db.Column(db.String(255), nullable=True)
-
-    # Optional relationship to link to DocumentReviewRequest
     documents = db.relationship('DocumentReviewRequest', back_populates='type')
 
     def __repr__(self):
@@ -879,12 +883,16 @@ class HRTaskTemplate(db.Model):
     responsible_manager_id = db.Column(BIGINT(unsigned=True), db.ForeignKey('user.id'))
     responsible_manager = db.relationship("User")
 
+    # ✅ Define If Task is Employee Task
+    is_employee_task = db.Column(db.Boolean, default=False)
     # ✅ Optional override or contact-specific address
     responsible_email = db.Column(db.String(150))
 
     phase = db.Column(db.String(20))  # "onboarding" or "offboarding"
     is_active = db.Column(db.Boolean, default=True)
 
+    document_type_id = db.Column(db.Integer, db.ForeignKey('document_types.id'), nullable=True)
+    document_type    = db.relationship('DocumentType')
 
 class UserHRTask(db.Model):
     __tablename__ = 'user_hr_task'

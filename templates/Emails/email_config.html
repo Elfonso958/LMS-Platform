@@ -7,9 +7,6 @@
     <h1>Email Configuration</h1>
     <ul class="nav nav-tabs" id="emailConfigTabs" role="tablist">
         <li class="nav-item" role="presentation">
-            <a class="nav-link active" id="line-training-tab" data-bs-toggle="tab" href="#line-training" role="tab" aria-controls="line-training" aria-selected="true">Line Training</a>
-        </li>
-        <li class="nav-item" role="presentation">
             <a class="nav-link" id="course-reminder-tab" data-bs-toggle="tab" href="#course-reminder" role="tab" aria-controls="course-reminder" aria-selected="false">Course Reminder</a>
         </li>
         <li class="nav-item" role="presentation">
@@ -17,21 +14,6 @@
         </li>
     </ul>
     <div class="tab-content" id="emailConfigTabsContent">
-        <!-- Line Training -->
-        <div class="tab-pane fade show active" id="line-training" role="tabpanel" aria-labelledby="line-training-tab">
-            <form method="POST" action="{{ url_for('admin.email_config') }}">
-                {{ line_training_form.hidden_tag() }}
-                <div class="mb-3">
-                    {{ line_training_form.thresholds.label(class="form-label") }}
-                    {{ line_training_form.thresholds(class="form-control") }}
-                </div>
-                <div class="mb-3">
-                    {{ line_training_form.line_training_roles.label(class="form-label") }}
-                    {{ line_training_form.line_training_roles(class="form-control") }}
-                </div>
-                <button type="submit" class="btn btn-primary" name="submit" value="line_training">Update Line Training Configuration</button>
-            </form>
-        </div>
 
         <!-- Course Reminder -->
         <div class="tab-pane fade" id="course-reminder" role="tabpanel" aria-labelledby="course-reminder-tab">

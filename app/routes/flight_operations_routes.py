@@ -15,7 +15,7 @@ nz_tz = ZoneInfo("Pacific/Auckland")
 
 # Add the parent directory to the system path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import render_template, redirect, url_for, flash, request, current_app, send_from_directory, g, jsonify, session,Response, send_file, Blueprint
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager, login_user, logout_user, login_required,current_user,UserMixin
@@ -45,7 +45,14 @@ from sqlalchemy import text, bindparam
 from cachetools import TTLCache
 from app.forms import CREW_CHECK_FIELDS
 from collections import defaultdict
-from services.envision_api import fetch_all_employees, fetch_flights_from_envision,fetch_crew_from_envision  # Import the envision_api module
+from services.envision_api import (
+    fetch_all_employees,
+    fetch_flights_from_envision,
+    fetch_crew_from_envision,
+    fetch_and_cache_positions,
+    POSITION_CACHE
+)
+
 EMPLOYEE_CACHE = TTLCache(maxsize=1000, ttl=3600)  # Stores up to 1000 employees, expires in 1 hour
 flightops_bp = Blueprint("FlightOps", __name__)
 
@@ -121,140 +128,158 @@ def flight_operations_dashboard():
                            user=current_user, 
                            changes=changes)
 
-@flightops_bp.route("/fetch_all_flight_data", methods=["POST"])
+@flightops_bp.route('/fetch_all_flight_data', methods=['POST'])
 def fetch_all_data():
-    """Fetch Flights, Crew, and Employee Data in one call and track changes."""
-    data = request.get_json()
-    date_from = data.get("dateFrom")
-    date_to = data.get("dateTo")
+    data       = request.get_json() or {}
+    date_from  = data.get("dateFrom")
+    date_to    = data.get("dateTo")
     auth_token = data.get("authToken")
 
-    if not date_from or not date_to or not auth_token:
+    # 0) Load crew‐position metadata once
+    fetch_and_cache_positions(auth_token)
+
+    # Validate inputs
+    if not (date_from and date_to and auth_token):
         return jsonify({"message": "Missing required parameters."}), 400
 
-    # ✅ Fetch Employees once and cache them (if not already cached)
+    # 1) Prime the employee cache
     if not EMPLOYEE_CACHE:
-        print("🔄 Fetching employees from API...")
+        current_app.logger.info("🔄 Fetching employees from API…")
         fetch_all_employees(auth_token)
 
+    # 2) Fetch all flights at once
     flights = fetch_flights_from_envision(date_from, date_to, auth_token)
+    flight_ids = [f["id"] for f in flights if f.get("id")]
+
+    # 3) Fetch all crew in parallel
+    raw_crews = {}
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        future_map = {
+            executor.submit(fetch_crew_from_envision, fid, auth_token): fid
+            for fid in flight_ids
+        }
+        for future in as_completed(future_map):
+            fid = future_map[future]
+            try:
+                raw_crews[fid] = future.result() or []
+            except Exception:
+                current_app.logger.error(f"Error fetching crew for flight {fid}")
+                raw_crews[fid] = []
+
+    # 4) Bulk‐load local users
+    all_emp_ids = {slot["employeeId"] for crew in raw_crews.values() for slot in crew if slot.get("employeeId")}
+    users = User.query.filter(User.employee_id.in_(all_emp_ids)).all() if all_emp_ids else []
+    user_map = {u.employee_id: u.username for u in users}
+
+    # Define the rank ordering
+    CATEGORY_ORDER = {"Captain":0, "First Officer":1, "Flight Attendant":2}
+
     stored_flights = []
+    pending = []
 
     for flight_data in flights:
-        flight_id = flight_data["id"]
+        fid = flight_data.get("id")
+        if not fid:
+            continue
 
-        # ✅ Fetch and process crew data
-        crew_list = []
-        raw_crew_data = fetch_crew_from_envision(flight_id, auth_token)
-
-        for crew_data in raw_crew_data:
-            employee_info = EMPLOYEE_CACHE.get(crew_data["employeeId"], None)
-            if employee_info:
-                crew_member = {
-                    "employeeId": crew_data["employeeId"],
-                    "firstName": safe_strip(employee_info["firstName"]),
-                    "surname": safe_strip(employee_info["surname"]),
-                    "position": crew_data["crewPositionId"]
-                }
-                crew_list.append(crew_member)
-
-        # ✅ Normalize Crew JSON for comparison
-        sorted_new_crew = normalize_crew_list(crew_list if crew_list else [])
-
-        # ✅ Retrieve Existing Flight (Check if already stored)
-        existing_flight = Flight.query.filter_by(flightid=flight_id, is_update=False).first()
-        existing_update = Flight.query.filter_by(flightid=flight_id, is_update=True).first()  # ✅ Fetch Existing Update
-
-        if existing_update:
-            # ✅ Remove the existing update before inserting the new one
-            print(f"🗑️ Deleting old update for Flight {flight_id}...")
-            db.session.delete(existing_update)
-            db.session.commit()  # Commit before adding the new one
-
-        if existing_flight:
-            sorted_existing_crew = normalize_crew_list(existing_flight.crew if existing_flight.crew else [])
-
-            # ✅ Normalize dates for comparison
-            stored_departure_scheduled = normalize_datetime(existing_flight.departureScheduled)
-            stored_arrival_scheduled = normalize_datetime(existing_flight.arrivalScheduled)
-            new_departure_scheduled = normalize_datetime(flight_data.get("departureScheduled"))
-            new_arrival_scheduled = normalize_datetime(flight_data.get("arrivalScheduled"))
-
-            new_departure_estimate = normalize_datetime(flight_data.get("departureEstimate")) if flight_data.get("departureEstimate") else None
-            new_arrival_estimate = normalize_datetime(flight_data.get("arrivalEstimate")) if flight_data.get("arrivalEstimate") else None
-
-            # ✅ Ensure estimated times are only used if different from scheduled
-            departure_changed = new_departure_estimate and new_departure_estimate != stored_departure_scheduled
-            arrival_changed = new_arrival_estimate and new_arrival_estimate != stored_arrival_scheduled
-
-            # ✅ Strict Comparison Check (Avoid unnecessary updates)
-            field_changes = {
-                "departureScheduled": stored_departure_scheduled != new_departure_scheduled,
-                "arrivalScheduled": stored_arrival_scheduled != new_arrival_scheduled,
-                "departureEstimate": departure_changed,
-                "arrivalEstimate": arrival_changed,
-                "flightNumberDescription": safe_strip(existing_flight.flightNumberDescription) != safe_strip(flight_data.get("flightNumberDescription")),
-                "flightDate": normalize_datetime(existing_flight.flightDate) != normalize_datetime(flight_data.get("flightDate")),
-                "departurePlaceDescription": safe_strip(existing_flight.departurePlaceDescription) != safe_strip(flight_data.get("departurePlaceDescription")),
-                "arrivalPlaceDescription": safe_strip(existing_flight.arrivalPlaceDescription) != safe_strip(flight_data.get("arrivalPlaceDescription")),
-                "flightLineDescription": safe_strip(existing_flight.flightLineDescription) != safe_strip(flight_data.get("flightLineDescription")),
-                "crewListChanged": sorted_existing_crew != sorted_new_crew
-            }
-
-            has_real_changes = any(field_changes.values())
-
-            if not has_real_changes:
-                print(f"✅ No real changes detected for Flight {flight_id}. Skipping update.\n")
+        # Build structured crew entries
+        crew_entries = []
+        for slot in raw_crews.get(fid, []):
+            emp_id = slot.get("employeeId")
+            if not emp_id:
                 continue
 
-            print(f"🔄 Change detected for Flight {flight_id}, creating new update...\n")
-
-            updated_flight = Flight(
-                flightid=flight_id,
-                update_id=f"{flight_id}_update",
-                parent_id=existing_flight.id,
-                is_update=True,
-                flightNumberDescription=safe_strip(flight_data.get("flightNumberDescription")),
-                flightDate=normalize_datetime(flight_data.get("flightDate")),
-                departureScheduled=new_departure_scheduled,
-                arrivalScheduled=new_arrival_scheduled,
-                departureEstimate=new_departure_estimate if departure_changed else None,
-                arrivalEstimate=new_arrival_estimate if arrival_changed else None,
-                departurePlaceDescription=safe_strip(flight_data.get("departurePlaceDescription")),
-                arrivalPlaceDescription=safe_strip(flight_data.get("arrivalPlaceDescription")),
-                flightLineDescription=safe_strip(flight_data.get("flightLineDescription")),
-                crew=sorted_new_crew
+            # Lookup local username, fallback to API fields
+            username = (
+                user_map.get(emp_id)
+                or slot.get("employeeUserName")
+                or slot.get("employee")
+                or str(emp_id)
             )
-            db.session.add(updated_flight)
 
+            # Determine category by position flags
+            pos = POSITION_CACHE.get(slot["crewPositionId"], {})
+            if pos.get("isCaptain"):
+                category = "Captain"
+            elif pos.get("isFirstOfficer"):
+                category = "First Officer"
+            elif pos.get("isCabinCrew"):
+                category = "Flight Attendant"
+            else:
+                category = pos.get("description", "Other")
+
+            crew_entries.append({"name":username, "category":category})
+
+        # Sort by rank (and name within same rank)
+        crew_entries.sort(key=lambda m: (CATEGORY_ORDER.get(m["category"], 99), m["name"]))
+
+        # Retrieve existing records
+        original = Flight.query.filter_by(flightid=fid, is_update=False).first()
+        existing_update = Flight.query.filter_by(flightid=fid, is_update=True).first()
+
+        # Remove stale update
+        if existing_update:
+            db.session.delete(existing_update)
+            db.session.flush()
+
+        # Detect changes vs. original
+        if original:
+            crew_changed   = (original.crew or []) != crew_entries
+            aircraft_changed = (original.flightLineDescription or "") != flight_data.get("flightLineDescription","")
+            if crew_changed or aircraft_changed:
+                upd = Flight(
+                    flightid=fid,
+                    update_id=f"{fid}_update",
+                    parent_id=original.id,
+                    is_update=True,
+                    flightNumberDescription=flight_data.get("flightNumberDescription",""),
+                    flightLineDescription=flight_data.get("flightLineDescription",""),
+                    departurePlaceDescription=flight_data.get("departurePlaceDescription",""),
+                    arrivalPlaceDescription=flight_data.get("arrivalPlaceDescription",""),
+                    departureScheduled=flight_data.get("departureScheduled"),
+                    arrivalScheduled=flight_data.get("arrivalScheduled"),
+                    crew=crew_entries
+                )
+                pending.append(upd)
         else:
-            print(f"🆕 No existing flight found for ID {flight_id}. Saving as new original flight...")
-            new_flight = Flight(
-                flightid=flight_id,
+            # brand-new original flight
+            orig = Flight(
+                flightid=fid,
                 is_update=False,
-                flightNumberDescription=safe_strip(flight_data.get("flightNumberDescription")),
-                flightDate=normalize_datetime(flight_data.get("flightDate")),
-                departureScheduled=normalize_datetime(flight_data.get("departureScheduled")),
-                arrivalScheduled=normalize_datetime(flight_data.get("arrivalScheduled")),
-                departureEstimate=normalize_datetime(flight_data.get("departureEstimate")),
-                arrivalEstimate=normalize_datetime(flight_data.get("arrivalEstimate")),
-                departurePlaceDescription=safe_strip(flight_data.get("departurePlaceDescription")),
-                arrivalPlaceDescription=safe_strip(flight_data.get("arrivalPlaceDescription")),
-                flightLineDescription=safe_strip(flight_data.get("flightLineDescription")),
-                crew=sorted_new_crew
+                flightNumberDescription=flight_data.get("flightNumberDescription",""),
+                flightLineDescription=flight_data.get("flightLineDescription",""),
+                departurePlaceDescription=flight_data.get("departurePlaceDescription",""),
+                arrivalPlaceDescription=flight_data.get("arrivalPlaceDescription",""),
+                departureScheduled=flight_data.get("departureScheduled"),
+                arrivalScheduled=flight_data.get("arrivalScheduled"),
+                crew=crew_entries
             )
-            db.session.add(new_flight)
-            db.session.commit()
-            print(f"✅ New flight {flight_id} inserted.")
+            pending.append(orig)
 
-        stored_flights.append(flight_data)
+        # Build response payload
+        stored_flights.append({
+            "id":                       fid,
+            "flightNumberDescription": flight_data.get("flightNumberDescription"),
+            "flightLineDescription":   flight_data.get("flightLineDescription"),
+            "departurePlaceDescription": flight_data.get("departurePlaceDescription"),
+            "arrivalPlaceDescription":   flight_data.get("arrivalPlaceDescription"),
+            "crew":                      crew_entries
+        })
 
-    db.session.commit()
+    # Persist all changes in one commit
+    for obj in pending:
+        db.session.add(obj)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        current_app.logger.warning("⚠️ Duplicate update detected, skipping.")
+        db.session.commit()
+
     return jsonify({
-        "message": "Flights, Crew, and Employee Data stored successfully!",
+        "message": "Flights, Crew, and Aircraft data stored successfully!",
         "flights": stored_flights
     }), 200
-
 
 @flightops_bp.route('/publish_flights', methods=['POST'])
 @login_required

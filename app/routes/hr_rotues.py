@@ -3,12 +3,16 @@ from flask_login import login_required, current_user
 from datetime import datetime
 from app import db, mail
 from flask_mail import Message
-from app.models import User, HRTaskTemplate, UserHRTask, RecruitmentRequest, Location, Department, EmploymentType, JobTitle, RoleType, DocumentType, RecruitmentType
+from app.models import User, HRTaskTemplate, UserHRTask, RecruitmentRequest, Location, Department, EmploymentType, JobTitle, RoleType, DocumentType, RecruitmentType, PayrollInformation
 from app.utils import admin_required
 from app.utils_file.hr import assign_hr_tasks_for_job_title
 from werkzeug.security import generate_password_hash
+from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta
 from email_utils import send_hr_task_email
+from app.utils_file.hr import assign_offboarding_tasks
+from flask import session
+from sqlalchemy import and_, or_
 hr_bp = Blueprint("hr", __name__)
 
 
@@ -70,7 +74,7 @@ def create_hr_task():
     responsible_job_title_id = request.form.get('responsible_job_title_id')
     responsible_email = request.form.get('responsible_email')
     assigned_ids = request.form.getlist('assigned_job_title_ids')
-
+    
     if not name or not phase or not assigned_ids:
         flash('Please fill in all required fields.', 'danger')
         return redirect(request.referrer or url_for('hr.manage_hr_tasks'))
@@ -159,19 +163,46 @@ def view_hr_tasks(user_id):
         return redirect(url_for('hr.view_hr_tasks', user_id=user.id))
 
     return render_template("HR_Module/user_tasks.html", tasks=tasks, user=user, templates=templates)
-
+    
 @hr_bp.route('/hr_dashboard', methods=['GET'])
 @login_required
 def hr_dashboard():
-    selected_phase = request.args.get("phase", "onboarding")
+    selected_phase = request.args.get("phase", "all")
     selected_status = request.args.get("status", "all")
+    view_mode = request.args.get("view_mode", "open")
+    document_types = DocumentType.query.order_by(DocumentType.name).all()
 
-    print("FILTER:", selected_phase, selected_status)
+    from sqlalchemy import and_, or_
 
+    print("FILTER:", selected_phase, selected_status, "VIEW:", view_mode)
+
+    # 1. Filter users based on open/closed view_mode BEFORE fetching them
+    user_query = User.query
+    if view_mode == "open":
+        user_query = user_query.filter(
+            or_(
+                and_(User.onboarding_start_date.isnot(None), User.completed_onboarding.is_(False)),
+                and_(User.offboarding_end_date.isnot(None), User.completed_offboarding.is_(False))
+            )
+        )
+    elif view_mode == "closed":
+        user_query = user_query.filter(
+            or_(
+                and_(User.onboarding_start_date.isnot(None), User.completed_onboarding.is_(True)),
+                and_(User.offboarding_end_date.isnot(None), User.completed_offboarding.is_(True))
+            )
+        )
+
+
+    users = user_query.all()
+
+    # 2. Load tasks only for those users
+    user_ids = [u.id for u in users]
     tasks = (
         UserHRTask.query
         .join(UserHRTask.user)
         .join(UserHRTask.task_template)
+        .filter(UserHRTask.user_id.in_(user_ids))
         .all()
     )
 
@@ -179,71 +210,85 @@ def hr_dashboard():
 
     user_dict = {}
     for task in tasks:
-        print("Task:", task.user.username, task.task_template.phase, task.status)
-
         if selected_phase != "all" and task.task_template.phase != selected_phase:
             continue
         if selected_status != "all" and task.status != selected_status:
             continue
 
-        user = task.user
-        uid = user.id
-
+        uid = task.user.id
         if uid not in user_dict:
             user_dict[uid] = {
-                "user": user,
+                "user": task.user,
                 "phase": task.task_template.phase,
                 "total": 0,
                 "completed": 0,
-                "date": user.onboarding_start_date if task.task_template.phase == 'onboarding' else user.offboarding_end_date
+                "date": task.user.onboarding_start_date if task.task_template.phase == 'onboarding'
+                        else task.user.offboarding_end_date
             }
 
         user_dict[uid]["total"] += 1
         if task.status == "Completed":
             user_dict[uid]["completed"] += 1
 
+    # 3. Format output
     user_data = []
     for u in user_dict.values():
         u["progress"] = int((u["completed"] / u["total"]) * 100) if u["total"] > 0 else 0
         user_data.append(u)
 
-    print("USERS FOUND:", len(user_data))
-
     return render_template(
         "HR_Module/hr_dashboard.html",
         user_data=user_data,
         selected_phase=selected_phase,
-        selected_status=selected_status
+        selected_status=selected_status,
+        view_mode=view_mode,
+        document_types=document_types
     )
+
 
 @hr_bp.route('/manage_hr_tasks', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def manage_hr_tasks():
+    document_types = DocumentType.query.order_by(DocumentType.name).all()
+
     if request.method == 'POST':
-        name = request.form.get('name')
-        description = request.form.get('description')
-        phase = request.form.get('phase')
-        responsible_email = request.form.get('responsible_email')
+        # … read all your form fields …
+        name                     = request.form.get('name')
+        description              = request.form.get('description')
+        phase                    = request.form.get('phase')
+        responsible_email        = request.form.get('responsible_email')
         responsible_job_title_id = request.form.get('responsible_job_title_id')
-        days_before = request.form.get('days_before', type=int)
-        assigned_job_title_ids = request.form.getlist('assigned_job_title_ids')
-        timing = request.form.get('timing') or 'before'
+        days_before              = request.form.get('days_before', type=int)
+        assigned_job_title_ids   = request.form.getlist('assigned_job_title_ids')
+        timing                   = request.form.get('timing') or 'before'
+        is_employee              = 'is_employee_task' in request.form
+        doc_type_id              = request.form.get('document_type_id', type=int) or None
+
+        # ── DEBUG: now that doc_type_id exists ───────────────────
+        print(f"[manage_hr_tasks POST] received document_type_id = {doc_type_id!r}")
+
+        # … rest of your logic to create the task …
         job_title = JobTitle.query.get(responsible_job_title_id) if responsible_job_title_id else None
         responsible_manager_id = job_title.manager_id if job_title and job_title.manager_id else None
 
         if name and phase and assigned_job_title_ids:
             task = HRTaskTemplate(
-                name=name,
-                description=description,
-                phase=phase,
-                responsible_email=responsible_email or None,
-                responsible_job_title_id=responsible_job_title_id or None,
-                responsible_manager_id=responsible_manager_id,
-                days_before=days_before or 0,
-                timing=timing
+                name                     = name,
+                description              = description,
+                phase                    = phase,
+                responsible_email        = responsible_email or None,
+                responsible_job_title_id = responsible_job_title_id or None,
+                responsible_manager_id   = responsible_manager_id,
+                days_before              = days_before or 0,
+                timing                   = timing,
+                is_employee_task         = is_employee,
+                document_type_id         = doc_type_id
             )
-            task.assigned_job_titles = JobTitle.query.filter(JobTitle.id.in_(assigned_job_title_ids)).all()
+            task.assigned_job_titles = JobTitle.query.filter(
+                JobTitle.id.in_(assigned_job_title_ids)
+            ).all()
+
             db.session.add(task)
             db.session.commit()
             flash("Task added successfully!", "success")
@@ -252,9 +297,16 @@ def manage_hr_tasks():
 
         return redirect(url_for('hr.manage_hr_tasks'))
 
-    tasks = HRTaskTemplate.query.order_by(HRTaskTemplate.phase).all()
+    # GET falls through here
+    tasks      = HRTaskTemplate.query.order_by(HRTaskTemplate.phase).all()
     job_titles = JobTitle.query.all()
-    return render_template("HR_Module/manage_hr_tasks.html", tasks=tasks, job_titles=job_titles)
+    return render_template(
+        "HR_Module/manage_hr_tasks.html",
+        tasks=tasks,
+        job_titles=job_titles,
+        document_types=document_types
+    )
+
 
 @hr_bp.route('/update_hr_task/<int:task_id>', methods=['POST'])
 @login_required
@@ -262,28 +314,35 @@ def update_hr_task(task_id):
     task = HRTaskTemplate.query.get_or_404(task_id)
     data = request.get_json()
 
-    task.name = data.get('name', task.name)
-    task.description = data.get('description', task.description)
-    task.phase = data.get('phase', task.phase)
-    task.responsible_email = data.get('responsible_email', task.responsible_email)
-    task.days_before = data.get('days_before', task.days_before)
-    task.timing = data.get('timing', task.timing)
-
-    new_responsible_jt_id = data.get('responsible_job_title_id')
-    task.responsible_job_title_id = new_responsible_jt_id
-
-    if new_responsible_jt_id:
-        job_title = JobTitle.query.get(new_responsible_jt_id)
+    # Pull raw value
+    raw_jt = data.get('responsible_job_title_id')
+    # Coerce to int or None
+    if raw_jt:
+        jt_id = int(raw_jt)
+        task.responsible_job_title_id = jt_id
+        # Update manager relationship
+        job_title = JobTitle.query.get(jt_id)
         task.responsible_manager_id = job_title.manager_id if job_title and job_title.manager_id else None
     else:
-        task.responsible_manager_id = None
+        task.responsible_job_title_id = None
+        task.responsible_manager_id  = None
 
-    job_title_ids = data.get('assigned_job_title_ids')
-    if job_title_ids is not None:
-        task.assigned_job_titles = JobTitle.query.filter(JobTitle.id.in_(job_title_ids)).all()
+    # Now do the other fields
+    task.name           = data.get('name', task.name)
+    task.description    = data.get('description', task.description)
+    task.phase          = data.get('phase', task.phase)
+    task.responsible_email = data.get('responsible_email') or None
+    task.days_before    = data.get('days_before', task.days_before)
+    task.timing         = data.get('timing', task.timing)
+
+    # Assigned job titles (if present)
+    if 'assigned_job_title_ids' in data:
+        ids = [int(i) for i in data['assigned_job_title_ids'] if i]
+        task.assigned_job_titles = JobTitle.query.filter(JobTitle.id.in_(ids)).all()
 
     db.session.commit()
     return jsonify(success=True)
+
 
 
 @hr_bp.route('/delete_hr_task/<int:task_id>', methods=['POST'])
@@ -374,7 +433,8 @@ def create_user():
             db.session.add(new_user)
             db.session.commit()
             flash(f"User {new_user.username} created successfully.", "success")
-
+            if new_user.offboarding_end_date:
+                assign_offboarding_tasks(new_user)
             # Optional: auto-create onboarding tasks
             if form.get("create_onboarding_tasks") == "yes":
                 assign_hr_tasks_for_job_title(new_user)
@@ -409,6 +469,7 @@ def sign_off_task_post():
     template_id = request.form.get('task_template_id')
     comment = request.form.get('comment')
     completed_by = request.form.get('completed_by') or current_user.username
+    next_page = request.form.get('next')
 
     task = UserHRTask.query.filter_by(user_id=user_id, task_template_id=template_id).first_or_404()
     task.status = "Completed"
@@ -418,4 +479,129 @@ def sign_off_task_post():
 
     db.session.commit()
     flash("Task signed off successfully.", "success")
-    return redirect(url_for("hr.my_tasks"))
+
+    return redirect(next_page or url_for("hr.my_tasks"))
+
+
+@hr_bp.route('/user_profile_new', methods=['GET', 'POST'])
+@login_required
+def user_profile():
+    user_id = request.form.get('user_id', default=current_user.id, type=int) if request.method == 'POST' else request.args.get('user_id', default=current_user.id, type=int)
+    user = User.query.get_or_404(user_id)
+    payroll = PayrollInformation.query.filter_by(user_id=user.id).first()
+    roles = RoleType.query.all()
+    job_titles = JobTitle.query.all()
+    users = User.query.all()
+    locations = Location.query.order_by(Location.name).all()
+    user_roles = [role.roleID for role in user.roles]
+    user_roles_names = [role.role_name for role in user.roles]
+    
+    if request.method == 'POST':
+        try:
+            if user.id != current_user.id and not current_user.is_admin:
+                flash('You do not have permission to edit this profile.', 'danger')
+                return redirect(url_for('hr.user_profile', user_id=user.id))
+
+            user.email = request.form.get('email')
+            user.username = request.form['username']
+            user.phone_number = request.form.get('phone_number')
+            user.address = request.form.get('address')
+            user.next_of_kin = request.form.get('next_of_kin')
+            user.kin_phone_number = request.form.get('kin_phone_number')
+            user.date_of_birth = request.form.get('date_of_birth')
+
+            if current_user.is_admin:
+                user.license_type = request.form.get('license_type')
+                user.license_number = request.form.get('license_number')
+                user.medical_expiry = request.form.get('medical_expiry')
+                selected_roles = request.form.getlist('roles')
+                user.roles = [RoleType.query.get(role_id) for role_id in selected_roles]
+                user.is_admin = 'is_admin' in request.form
+                user.location_id = request.form.get('location_id') or None
+                user.auth_type = request.form.get('auth_type') or user.auth_type
+                
+                date_of_birth_str = request.form.get('date_of_birth')
+                user.date_of_birth = datetime.strptime(date_of_birth_str, '%Y-%m-%d').date() if date_of_birth_str else None
+
+                medical_expiry_str = request.form.get('medical_expiry')
+                user.medical_expiry = datetime.strptime(medical_expiry_str, '%Y-%m-%d').date() if medical_expiry_str else None
+
+                onboarding_start_date_str = request.form.get('onboarding_start_date')
+                user.onboarding_start_date = datetime.strptime(onboarding_start_date_str, '%Y-%m-%d').date() if onboarding_start_date_str else None
+
+                offboarding_end_date_str = request.form.get('offboarding_end_date')
+                user.offboarding_end_date = datetime.strptime(offboarding_end_date_str, '%Y-%m-%d').date() if offboarding_end_date_str else None
+
+                if user.auth_type == 'local':
+                    new_password = request.form.get('password', '').strip()
+                    if new_password:
+                        user.password = generate_password_hash(new_password, method='pbkdf2:sha256')
+
+            if user.auth_type == 'local' and request.form.get('password', '').strip():
+                user.password = generate_password_hash(request.form['password'], method='pbkdf2:sha256')
+
+            user.job_title_id = request.form.get('job_title_id') or None
+            user.reports_to = request.form.get('manager_id') or None
+
+            if not payroll:
+                payroll = PayrollInformation(user_id=user.id)
+                db.session.add(payroll)
+
+            payroll.type_of_employment = request.form.get('type_of_employment')
+            payroll.minimum_hours = request.form.get('minimum_hours') == 'True'
+            payroll.hours = request.form.get('hours') if payroll.minimum_hours else None
+            payroll.kiwisaver_attached = request.form.get('kiwisaver_attached') == 'True'
+            payroll.kiwisaver_type = request.form.get('kiwisaver_type') if payroll.kiwisaver_attached else None
+            payroll.paye_attached = request.form.get('paye_attached') == 'True'
+            payroll.ir330_attached = request.form.get('ir330_attached') == 'True'
+            payroll.ird_number = request.form.get('ird_number')
+            payroll.bank_account_details = request.form.get('bank_account_details')
+
+            # If offboarding date is set and user has no offboarding tasks yet, assign them
+            if user.offboarding_end_date:
+                has_offboarding = any(
+                    t for t in user.hr_tasks if t.task_template and t.task_template.phase == 'offboarding'
+                )
+                if not has_offboarding:
+                    assign_offboarding_tasks(user)
+                    flash('email_sent', 'email_status')  # ✅ set flag to trigger toast
+
+            db.session.commit()
+            flash('Profile updated successfully.', 'success')
+
+        except IntegrityError as e:
+            db.session.rollback()
+            flash(f'An error occurred: {str(e)}', 'danger')
+
+        return redirect(url_for('hr.user_profile', user_id=user.id))
+    session.pop('email_sent', None)  # clear it after use
+
+    return render_template(
+        'HR_Module/user_profile.html', 
+        user=user,
+        payroll=payroll,
+        roles=roles,
+        job_titles=job_titles,
+        users=users,
+        locations=locations,
+        user_roles=user_roles,
+        user_roles_names=user_roles_names
+    )
+
+@hr_bp.route('/close_phase/<int:user_id>/<phase>', methods=['POST'])
+@login_required
+def close_phase(user_id, phase):
+    user = User.query.get_or_404(user_id)
+
+    if phase == 'onboarding':
+        user.completed_onboarding = True
+        flash(f"{user.username}'s onboarding has been closed.", "success")
+    elif phase == 'offboarding':
+        user.completed_offboarding = True
+        flash(f"{user.username}'s offboarding has been closed.", "success")
+    else:
+        flash("Invalid phase specified.", "danger")
+
+    db.session.commit()
+    return redirect(url_for('hr.hr_dashboard'))
+

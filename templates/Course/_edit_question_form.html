@@ -1,0 +1,12 @@
+<form method="POST"
+      action="{{ url_for('course.manage_questions', course_id=question.course_id) }}">
+  <input type="hidden" name="form_action" value="edit">
+  <input type="hidden" name="question_id" value="{{ question.id }}">
+  <div class="mb-3">
+    <label class="form-label">Edit Question</label>
+    <textarea class="form-control"
+              name="question_text"
+              required>{{ question.text }}</textarea>
+  </div>
+  <button type="submit" class="btn btn-primary">Save Changes</button>
+</form>

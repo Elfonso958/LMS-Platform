@@ -47,6 +47,7 @@ from collections import defaultdict
 
 ENVISION_URL = "https://envision.airchathams.co.nz:8790/v1"
 EMPLOYEE_CACHE = TTLCache(maxsize=1000, ttl=3600)  # Stores up to 1000 employees, expires in 1 hour
+POSITION_CACHE = TTLCache(maxsize=20, ttl=3600)
 
 ######################################
 ### Assign Role Based from Envision###
@@ -315,6 +316,16 @@ def fetch_and_update_roles():
                 role.role_description = role_description  # Update the description if it exists
                 role.pulled_from_envision = True  # Update the flag if the role is from Envision
         
+        # Pre-delete nav_item_permission entries that reference roles to be removed
+        roles_to_delete = [role for role_name, role in existing_roles.items()
+                        if role_name not in roles_found_in_envision and role.pulled_from_envision]
+
+        if roles_to_delete:
+            role_ids = [role.roleID for role in roles_to_delete]
+            NavItemPermission.query.filter(NavItemPermission.role_id.in_(role_ids)).delete(synchronize_session=False)
+            db.session.flush()  # Ensure FK cleanup before deleting roles
+
+
         # Delete roles that are not found in the Envision API response and have pulled_from_envision set to True
         for role_name, role in existing_roles.items():
             if role_name not in roles_found_in_envision and role.pulled_from_envision:
@@ -325,3 +336,13 @@ def fetch_and_update_roles():
     else:
         print(f"Failed to fetch data from API. Status code: {response.status_code}")
         return None
+    
+def fetch_and_cache_positions(auth_token):
+    """Fetch /v1/Crews/Positions once and store in POSITION_CACHE."""
+    if POSITION_CACHE:
+        return
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    resp = requests.get(f"{ENVISION_URL}/Crews/Positions", headers=headers)
+    resp.raise_for_status()
+    for pos in resp.json():
+        POSITION_CACHE[pos["id"]] = pos

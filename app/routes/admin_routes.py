@@ -62,6 +62,72 @@ def switch_user():
     return render_template('admin/switch_user.html', users=users)
 
 
+################################
+###Link all users to Envision###
+################################
+
+@admin_bp.route('/bulk_link_envision', methods=['POST'])
+@login_required
+def bulk_link_envision():
+    """Fetch all Envision Employees, bulk-link User.employee_id, then assign roles."""
+    auth_token = session.get('auth_token')
+    if not auth_token:
+        return jsonify(success=False, message="Missing Envision auth token"), 400
+
+    # 1) pull down all employees
+    headers = {'Authorization': f'Bearer {auth_token}'}
+    resp = requests.get(f'{ENVISION_URL}/Employees', headers=headers, timeout=10)
+    if not resp.ok:
+        current_app.logger.error("Failed fetch Envision Employees: %s %s",
+                                resp.status_code, resp.text)
+        return jsonify(success=False,
+                       message="Failed to fetch Employees from Envision"), 502
+
+    employees = resp.json()
+    emp_map = {e['employeeNo']: e['id'] for e in employees if 'employeeNo' in e and 'id' in e}
+
+    report = []
+    # 2) iterate all Users who have a crew_code
+    for u in User.query.filter(User.crew_code.isnot(None)).all():
+        envision_id = emp_map.get(u.crew_code)
+        if not envision_id:
+            # no match in Envision
+            report.append({
+                'username': u.username,
+                'linked': False,
+                'message': 'No matching Envision employeeNo'
+            })
+            continue
+
+        changed = False
+        if u.employee_id != envision_id:
+            u.employee_id = envision_id
+            changed = True
+
+        # 3) fetch & assign roles based on skills
+        #    fetch_and_assign_user_roles commits internally
+        data = fetch_and_assign_user_roles(u) or []
+
+        # pull out the current role names from the DB
+        roles = [ r.role_name for r in u.roles ]
+
+        report.append({
+            'username': u.username,
+            'linked': True,
+            'employee_id': envision_id,
+            'employee_id_changed': changed,
+            'roles': roles
+        })
+
+    # 4) commit any employee_id changes
+    db.session.commit()
+    current_app.logger.info("Bulk linked %d users", len([r for r in report if r['linked']]))
+
+    return jsonify(
+        success=True,
+        report=report
+    ), 200
+
 ###########################################
 #### Admin Routes for Navbar Management####
 ###########################################
@@ -69,27 +135,41 @@ def switch_user():
 @login_required
 def manage_navbar():
     available_endpoints = sorted(current_app.view_functions.keys())
+
     if request.method == 'POST':
-        # Save permissions
         NavItemPermission.query.delete()
         db.session.commit()
 
         for nav_item in NavItem.query.all():
-            selected_roles = request.form.getlist(f'permissions-{nav_item.id}')
-            inherited_role_ids = set()
-
+            # Roles
+            selected_roles = request.form.getlist(f'permissions-{nav_item.id}-role')
             for role_id in selected_roles:
-                if int(role_id) == -1:
-                    continue  # Skip admin
-                role_id_int = int(role_id)
-                db.session.add(NavItemPermission(nav_item_id=nav_item.id, role_id=role_id_int))
-                inherited_role_ids.add(role_id_int)
+                if int(role_id) != -1:
+                    db.session.add(NavItemPermission(nav_item_id=nav_item.id, role_id=int(role_id)))
 
-            # Inherit roles to children only if requested
+            # Job Titles
+            selected_jobs = request.form.getlist(f'permissions-{nav_item.id}-job')
+            for job_id in selected_jobs:
+                db.session.add(NavItemPermission(nav_item_id=nav_item.id, job_title_id=int(job_id)))
+
+            # (Optional: Skills)
+            # selected_skills = request.form.getlist(f'permissions-{nav_item.id}-skill')
+            # for skill_id in selected_skills:
+            #     db.session.add(NavItemPermission(nav_item_id=nav_item.id, skill_id=int(skill_id)))
+
+            # Inherit logic
             for child in nav_item.children:
                 if request.form.get(f'inherit_roles_{child.id}'):
-                    for role_id in inherited_role_ids:
-                        db.session.add(NavItemPermission(nav_item_id=child.id, role_id=role_id))
+                    # Inherit roles
+                    for role_id in selected_roles:
+                        if int(role_id) != -1:
+                            db.session.add(NavItemPermission(nav_item_id=child.id, role_id=int(role_id)))
+                    # Inherit job titles
+                    for job_id in selected_jobs:
+                        db.session.add(NavItemPermission(nav_item_id=child.id, job_title_id=int(job_id)))
+                    # Inherit skills — future support
+                    # for skill_id in selected_skills:
+                    #     db.session.add(NavItemPermission(nav_item_id=child.id, skill_id=int(skill_id)))
 
         # Save or update nav item
         if request.form.get('nav_action') == 'save_nav':
@@ -100,6 +180,7 @@ def manage_navbar():
             if endpoint and not is_valid_endpoint(endpoint):
                 flash(f"Invalid endpoint '{endpoint}' — it does not exist in the app routes.", "danger")
                 return redirect(url_for('admin.manage_navbar'))
+
             if item_id:
                 item = NavItem.query.get(item_id)
                 item.label = label
@@ -117,28 +198,29 @@ def manage_navbar():
         flash("Permissions updated successfully.", "success")
         return redirect(url_for('admin.manage_navbar'))
 
-    # Load data for GET
+    # GET
     all_roles = RoleType.query.all() + [type('Role', (), {'roleID': -1, 'role_name': 'Admin'})()]
+    all_job_titles = JobTitle.query.all()
 
-    # ✅ Sorted headers (top-level nav items)
     nav_items = NavItem.query.filter_by(parent_id=None).order_by(NavItem.order.asc()).all()
-
     enriched_nav_items = []
-    for item in nav_items:
-        allowed_role_ids = [p.role_id for p in NavItemPermission.query.filter_by(nav_item_id=item.id).all()]
 
-        # ✅ Sorted children
-        sorted_children = sorted(item.children, key=lambda c: c.order or 0)
+    for item in nav_items:
+        allowed_role_ids = [p.role_id for p in NavItemPermission.query.filter_by(nav_item_id=item.id).filter(NavItemPermission.role_id.isnot(None)).all()]
+        allowed_job_ids = [p.job_title_id for p in NavItemPermission.query.filter_by(nav_item_id=item.id).filter(NavItemPermission.job_title_id.isnot(None)).all()]
+
         children = []
-        for child in sorted_children:
+        for child in sorted(item.children, key=lambda c: c.order or 0):
+            child_roles = [p.role_id for p in NavItemPermission.query.filter_by(nav_item_id=child.id).filter(NavItemPermission.role_id.isnot(None)).all()]
+            child_jobs = [p.job_title_id for p in NavItemPermission.query.filter_by(nav_item_id=child.id).filter(NavItemPermission.job_title_id.isnot(None)).all()]
+
             children.append({
                 "id": child.id,
                 "label": child.label,
                 "endpoint": child.endpoint,
-                "allowed_role_ids": [
-                    p.role_id for p in NavItemPermission.query.filter_by(nav_item_id=child.id).all()
-                ],
-                "inherit_roles": child.inherit_roles  # ✅ THIS IS REQUIRED
+                "allowed_role_ids": child_roles,
+                "allowed_job_ids": child_jobs,
+                "inherit_roles": child.inherit_roles
             })
 
         enriched_nav_items.append({
@@ -146,6 +228,7 @@ def manage_navbar():
             "label": item.label,
             "endpoint": item.endpoint,
             "allowed_role_ids": allowed_role_ids,
+            "allowed_job_ids": allowed_job_ids,
             "children": children
         })
 
@@ -153,9 +236,11 @@ def manage_navbar():
         'admin/manage_navbar.html',
         nav_items=enriched_nav_items,
         all_roles=all_roles,
-        all_headers=nav_items,  # already sorted
-        available_endpoints=available_endpoints  # ✅ Add this
+        all_job_titles=all_job_titles,
+        all_headers=nav_items,
+        available_endpoints=available_endpoints
     )
+
 
 @admin_bp.route('/toggle_inherit_roles', methods=['POST'])
 @login_required
@@ -261,6 +346,24 @@ def update_nav_permission_ajax():
     db.session.commit()
     return '', 204
 
+@admin_bp.route('/update_nav_job_permission_ajax', methods=['POST'])
+@login_required
+def update_nav_job_permission_ajax():
+    data = request.get_json()
+    nav_item_id = int(data['nav_item_id'])
+    job_title_id = int(data['job_title_id'])
+    action = data['action']
+
+    if action == 'add':
+        existing = NavItemPermission.query.filter_by(nav_item_id=nav_item_id, job_title_id=job_title_id).first()
+        if not existing:
+            db.session.add(NavItemPermission(nav_item_id=nav_item_id, job_title_id=job_title_id))
+    elif action == 'remove':
+        NavItemPermission.query.filter_by(nav_item_id=nav_item_id, job_title_id=job_title_id).delete()
+
+    db.session.commit()
+    return '', 204
+
 
 @admin_bp.route('/manage_roles', methods=['GET', 'POST'])
 @login_required
@@ -296,19 +399,26 @@ def manage_roles():
             if role_id:
                 role = RoleType.query.get(role_id)
                 if role:
+                    # Step 1: Remove role from users (if needed)
                     if role.users:
-                        # If role has users assigned, remove role from users first
                         for user in role.users:
                             user.roles.remove(role)
                         db.session.commit()
-                        flash(f'Role "{role.role_name}" was removed from assigned users and deleted.', 'warning')
+
+                    # ✅ Step 2: Remove related nav item permissions
+                    NavItemPermission.query.filter_by(role_id=role.roleID).delete()
+                    db.session.commit()
+
+                    # Step 3: Delete the role itself
                     db.session.delete(role)
                     db.session.commit()
+
                     flash(f'Role "{role.role_name}" deleted successfully.', 'success')
                 else:
                     flash('Role not found.', 'danger')
             else:
                 flash('Invalid role ID.', 'danger')
+
 
         return redirect(url_for('admin.manage_roles'))
 
@@ -552,23 +662,16 @@ def email_config():
         db.session.add(config)
         db.session.commit()
 
-    line_training_form = LineTrainingEmailConfigForm(obj=config)
     course_reminder_form = CourseReminderEmailConfigForm(obj=config)
     medical_expiry_form = MedicalExpiryEmailConfigForm(obj=config)  # ✅ new form
 
     # Populate role choices
     roles = RoleType.query.all()
     role_choices = [(role.roleID, role.role_name) for role in roles]
-    line_training_form.line_training_roles.choices = role_choices
 
     if request.method == 'POST':
-        if request.form['submit'] == 'line_training' and line_training_form.validate_on_submit():
-            config.line_training_thresholds = line_training_form.thresholds.data
-            config.line_training_roles = ",".join(map(str, line_training_form.line_training_roles.data))
-            db.session.commit()
-            flash('Line Training configuration updated successfully.', 'success')
 
-        elif request.form['submit'] == 'course_reminder' and course_reminder_form.validate_on_submit():
+        if request.form['submit'] == 'course_reminder' and course_reminder_form.validate_on_submit():
             config.course_reminder_days = course_reminder_form.course_reminder_days.data
             config.course_reminder_email = course_reminder_form.course_reminder_email.data
             db.session.commit()
@@ -587,15 +690,13 @@ def email_config():
     training_team_users = training_team_role.users if training_team_role else []
 
     # Set the form data from the config object
-    line_training_form.thresholds.data = config.line_training_thresholds
-    line_training_form.line_training_roles.data = config.get_line_training_roles()
+
     course_reminder_form.course_reminder_days.data = config.course_reminder_days
     course_reminder_form.course_reminder_email.data = config.course_reminder_email
     medical_expiry_form.medical_expiry_days.data = str(config.medical_expiry_days or '')
     medical_expiry_form.medical_expiry_email.data = config.medical_expiry_email
 
     return render_template('emails/email_config.html',
-                           line_training_form=line_training_form,
                            course_reminder_form=course_reminder_form,
                            medical_expiry_form=medical_expiry_form,
                            training_team_users=training_team_users)

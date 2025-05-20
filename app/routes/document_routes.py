@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from datetime import datetime
 import os
-from app.models import db, DocumentType, DocumentReviewRequest, User
+from app.models import db, DocumentType, DocumentReviewRequest, User, UserHRTask, HRTaskTemplate
 from app.forms import DocumentTypeForm, FormUpload, DirectDocumentUploadForm
 from app.email_utils import send_email
 from app.utils import admin_required
@@ -59,7 +59,7 @@ def user_documents():
     users_with_docs = (
         db.session.query(User)
         .join(doc_alias, User.id == doc_alias.user_id)
-        .filter(doc_alias.status == 'approve')
+        .filter(doc_alias.status == 'approved')
         .distinct()
         .all()
     )
@@ -67,7 +67,7 @@ def user_documents():
     grouped_docs = {}
     for user in users_with_docs:
         docs = DocumentReviewRequest.query.filter_by(
-            user_id=user.id, status='approve'
+            user_id=user.id, status='approved'
         ).order_by(DocumentReviewRequest.submitted_at.desc()).all()
 
         doc_groups = defaultdict(list)
@@ -129,7 +129,7 @@ def upload_document_admin():
         document_expiry_date=formatted_date,
         file_path=relative_path,
         submitted_at=datetime.utcnow(),
-        status='approve'
+        status='approved'
     )
     db.session.add(new_doc)
     db.session.commit()
@@ -140,132 +140,212 @@ def upload_document_admin():
 @document_bp.route("/review_documents", methods=["GET", "POST"])
 @login_required
 def review_documents():
-    page = request.args.get("page", 1, type=int)
+    page        = request.args.get("page", 1, type=int)
     filter_type = request.args.get("filter", "", type=str)
 
     if request.method == "POST":
-        doc_id = request.form.get("doc_id")
+        # 1) Bulk‐update the DocumentReviewRequest records
+        ids        = request.form.get("doc_ids", "")
         new_status = request.form.get("action")
-        comment = request.form.get("comment", "")
+        comment    = request.form.get("comment", "")
+        doc_ids    = [int(i) for i in ids.split(",") if i]
+        docs       = DocumentReviewRequest.query.filter(
+                        DocumentReviewRequest.id.in_(doc_ids)
+                     ).all()
 
-        if not doc_id or not new_status:
-            flash("Missing document ID or action.", "danger")
-            return redirect(url_for("document.review_documents", page=page, filter=filter_type))
+        for doc in docs:
+            doc.status         = new_status
+            doc.review_comment = comment
+            doc.reviewed_by_id = current_user.id
+            doc.reviewed_at    = datetime.utcnow()
 
-        doc = DocumentReviewRequest.query.get(doc_id)
-        if not doc:
-            flash("Document not found.", "danger")
-            return redirect(url_for("document.review_documents", page=page, filter=filter_type))
-
-        doc.status = new_status
-        doc.review_comment = comment
-        doc.reviewed_by_id = current_user.id
-        doc.reviewed_at = datetime.utcnow()
-
-        # Delete file if rejected
-        if new_status == 'reject':
-            if doc.file_path:
-                full_path = (
+            # if rejected, delete the file
+            if new_status == 'reject' and doc.file_path:
+                full = (
                     doc.file_path
                     if os.path.isabs(doc.file_path)
-                    else os.path.join(current_app.static_folder, doc.file_path.lstrip("/"))
+                    else os.path.join(current_app.static_folder,
+                                      doc.file_path.lstrip("/"))
                 )
-                if os.path.exists(full_path):
-                    try:
-                        os.remove(full_path)
-                    except Exception:
-                        pass
+                if os.path.exists(full):
+                    os.remove(full)
 
-            # ✅ Send rejection email
-            if doc.user.email:
-                email_body = render_template(
-                    "emails/document_rejection_notice.html",
-                    user=doc.user,
-                    document=doc,
-                    upload_url=url_for("document.upload_document", _external=True)
-                )
-                send_email(
-                    subject=f"Document Rejected: {doc.type.name}",
-                    recipients=[doc.user.email],
-                    html=email_body
-                )
+        # 2) Re‐open or complete the matching HR task(s) for that user+doctype
+        if docs:
+            user_id     = docs[0].user_id
+            doc_type_id = docs[0].document_type_id
 
-        # Update medical expiry if approved
-        if new_status == 'approved' and doc.type and doc.type.name.lower() == "medical":
-            doc.user.medical_expiry = doc.document_expiry_date
+            tasks = UserHRTask.query.join(HRTaskTemplate).filter(
+                        UserHRTask.user_id               == user_id,
+                        HRTaskTemplate.document_type_id  == doc_type_id
+                    ).all()
+
+            for t in tasks:
+                if new_status == 'approved':
+                    t.status       = 'Completed'
+                    t.completed_by = current_user.username
+                    t.completed_at = datetime.utcnow()
+                else:  # reject → reopen
+                    t.status       = 'Pending'
+                    t.completed_by = None
+                    t.completed_at = None
 
         db.session.commit()
-        flash(f"Document {new_status.capitalize()}!", "success")
-        return redirect(url_for("document.review_documents", page=page, filter=filter_type))
+        flash(f"Document(s) {new_status.capitalize()}!", "success")
+        return redirect(url_for("document.review_documents",
+                                page=page, filter=filter_type))
 
-    # GET request
-    document_types = DocumentType.query.order_by(DocumentType.name.asc()).all()
+    # ─── GET: page & filter ───────────────────────────────────────────────────
     query = DocumentReviewRequest.query.filter_by(status="pending")
-
     if filter_type:
-        matched_type = DocumentType.query.filter_by(name=filter_type).first()
-        if matched_type:
-            query = query.filter_by(document_type_id=matched_type.id)
+        try:
+            dtid = int(filter_type)
+            query = query.filter_by(document_type_id=dtid)
+        except ValueError:
+            pass
 
-    pending_docs = query.order_by(DocumentReviewRequest.submitted_at.desc()).paginate(page=page, per_page=10)
+    pending_docs = query\
+        .order_by(DocumentReviewRequest.submitted_at.desc())\
+        .paginate(page=page, per_page=10)
 
+    # group only this page’s items by (user, doctype, expiry)
+    buckets = defaultdict(list)
+    for d in pending_docs.items:
+        key = (d.user_id, d.document_type_id, d.document_expiry_date)
+        buckets[key].append(d)
+
+    pending_groups = []
+    for (uid, dtid, expiry), docs in buckets.items():
+        pending_groups.append({
+            "user":          docs[0].user,
+            "document_type": docs[0].type,
+            "expiry_date":   expiry,
+            "submitted_at":  docs[0].submitted_at,
+            "doc_ids":       ",".join(str(d.id) for d in docs),
+            "files":         docs
+        })
+
+    document_types = DocumentType.query.order_by(DocumentType.name).all()
     return render_template(
         "documents/review_documents.html",
-        pending_docs=pending_docs,
-        document_types=document_types,
-        filter=filter_type
+        pending_docs    = pending_docs,
+        pending_groups  = pending_groups,
+        document_types  = document_types,
+        filter          = filter_type
     )
 
 ########################
 ###DOCUMENT UPLOAD###
 #######################
+# app/routes/document_routes.py
+
 @document_bp.route('/upload_document', methods=['GET', 'POST'])
 @login_required
 def upload_document():
     form = FormUpload()
 
-    # Populate dropdown from DB
-    form.document_type.choices = [(dt.id, dt.name) for dt in DocumentType.query.order_by(DocumentType.name).all()]
+    # ── Load and bind all document types ───────────────────────
+    doc_types = DocumentType.query.order_by(DocumentType.name).all()
+    form.document_type.choices = [(dt.id, dt.name) for dt in doc_types]
 
-    if form.validate_on_submit():
-        file = form.file.data
+    # ── Allow pre‐selection (so your “Complete” link can pass task_id & document_type) ──
+    task_id    = request.args.get('task_id',        type=int)
+    pre_doc_id = request.args.get('document_type',  type=int)
+    if request.method == 'GET' and pre_doc_id:
+        form.document_type.data = pre_doc_id
+
+    # ── Compute how many pages we ought to render ─────────────
+    pages_required = 1
+    if form.document_type.data:
+        dt = next((d for d in doc_types if d.id == form.document_type.data), None)
+        pages_required = dt.pages_required or 1
+
+    if request.method == 'POST':
+        # only validate those two fields:
+        if not form.document_type.data or not form.document_expiry_date.data:
+            flash("Please choose a document type and expiry date.", "danger")
+            return render_template(
+                'documents/upload_document.html',
+                form            = form,
+                pages_required  = pages_required,
+                doc_types       = doc_types
+            )
+
+        # now fetch all files[] inputs
+        files = request.files.getlist('files[]')
+        if len(files) != pages_required or any(f.filename == '' for f in files):
+            flash(f"Please upload all {pages_required} page(s).", "danger")
+            return render_template(
+                'documents/upload_document.html',
+                form            = form,
+                pages_required  = pages_required,
+                doc_types       = doc_types
+            )
+
+        # ── Save each page + insert DocumentReviewRequest ────────
         document_type_id = form.document_type.data
-        expiry_date = form.document_expiry_date.data
+        expiry_date      = form.document_expiry_date.data
+        dt_obj           = DocumentType.query.get(document_type_id)
+        dt_name          = secure_filename(dt_obj.name)
+        user_name        = secure_filename(current_user.username)
+        date_str         = expiry_date.strftime('%Y-%m-%d')
 
-        # Get document type name
-        document_type = DocumentType.query.get(document_type_id)
-        doc_type_name = secure_filename(document_type.name)
-        username = secure_filename(current_user.username)
-        formatted_date = expiry_date.strftime('%Y-%m-%d')
+        for idx, file in enumerate(files, start=1):
+            ext      = os.path.splitext(file.filename)[1]
+            filename = f"{dt_name}-page{idx}-of{pages_required}-{user_name}-{date_str}{ext}"
+            upload_folder = os.path.join(
+                current_app.static_folder, 'uploads', user_name, dt_name
+            )
+            os.makedirs(upload_folder, exist_ok=True)
+            full_path = os.path.join(upload_folder, filename)
+            file.save(full_path)
 
-        # Filename: e.g., "Medical - Jayden Beck - 2025-08-01.pdf"
-        extension = os.path.splitext(file.filename)[1]
-        renamed_filename = secure_filename(f"{doc_type_name} - {current_user.username} - {formatted_date}{extension}")
-
-        # Folder structure: static/uploads/<Username>/<DocumentType>
-        upload_folder = os.path.join(current_app.static_folder, 'uploads', current_user.username, doc_type_name)
-        os.makedirs(upload_folder, exist_ok=True)
-
-        # Save path
-        full_path = os.path.join(upload_folder, renamed_filename)
-        file.save(full_path)
-
-        # Relative path for DB and static serving
-        relative_path = f"uploads/{current_user.username}/{doc_type_name}/{renamed_filename}"
-
-        # Save metadata to DB
-        new_request = DocumentReviewRequest(
-            user_id=current_user.id,
-            document_type_id=document_type_id,
-            document_expiry_date=expiry_date,
-            file_path=relative_path,
-            submitted_at=datetime.utcnow(),
-            status='pending'
-        )
-        db.session.add(new_request)
+            rel_path = f"uploads/{user_name}/{dt_name}/{filename}"
+            new_req  = DocumentReviewRequest(
+                user_id              = current_user.id,
+                document_type_id     = document_type_id,
+                document_expiry_date = expiry_date,
+                file_path            = rel_path,
+                submitted_at         = datetime.utcnow(),
+                status               = 'pending'
+            )
+            db.session.add(new_req)
         db.session.commit()
 
-        flash("Your document has been submitted for review.", "success")
-        return redirect(url_for('document.upload_document'))
+        # ── Auto‐complete the HR task(s) ────────────────────────
+        if task_id:
+            t = UserHRTask.query.get(task_id)
+            if t and t.status == 'Pending':
+                t.status        = 'Completed'
+                t.completed_by  = current_user.username
+                t.completed_at  = datetime.utcnow()
+                db.session.commit()
+                flash("Document uploaded & task auto‑completed.", "success")
+            else:
+                flash("Document uploaded, but that task was already completed.", "info")
+        else:
+            pending = (
+                UserHRTask.query
+                .join(HRTaskTemplate, UserHRTask.task_template)
+                .filter(
+                    UserHRTask.user_id              == current_user.id,
+                    UserHRTask.status               == 'Pending',
+                    HRTaskTemplate.document_type_id == document_type_id
+                )
+                .all()
+            )
+            for t in pending:
+                t.status        = 'Completed'
+                t.completed_by  = current_user.username
+                t.completed_at  = datetime.utcnow()
+            db.session.commit()
+            flash(f"Document uploaded & {len(pending)} task(s) auto‑completed.", "success")
 
-    return render_template("documents/upload_document.html", form=form)
+        return redirect(url_for('user.user_dashboard'))
+
+    return render_template(
+        'documents/upload_document.html',
+        form            = form,
+        pages_required  = pages_required,
+        doc_types       = doc_types
+    )

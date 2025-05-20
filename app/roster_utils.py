@@ -2,7 +2,7 @@ import sys
 import os
 import json
 import requests  # <-- Add this import
-from app import create_app, db, mail
+from app.extensions import db, mail
 from sqlalchemy.exc import IntegrityError
 import secrets
 from sqlalchemy.exc import IntegrityError  # ✅ Fix missing import

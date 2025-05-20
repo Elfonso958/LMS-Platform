@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      background-color: #f9f9f9;
+      color: #333;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 700px;
+      margin: auto;
+      background-color: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      padding: 30px;
+    }
+
+    .header {
+      background-color: #007bff;
+      color: white;
+      padding: 15px;
+      border-radius: 5px;
+      text-align: center;
+      margin-bottom: 25px;
+    }
+
+    .section-title {
+      font-size: 1.2em;
+      font-weight: bold;
+      margin-top: 30px;
+      border-bottom: 2px solid #007bff;
+      padding-bottom: 5px;
+      color: #007bff;
+    }
+
+    .summary p {
+      margin: 5px 0;
+    }
+
+    ul.clean-list {
+      list-style-type: none;
+      padding-left: 0;
+    }
+
+    ul.clean-list li {
+      background-color: #f1f3f5;
+      margin: 5px 0;
+      padding: 10px;
+      border-radius: 5px;
+    }
+
+    .footer {
+      margin-top: 30px;
+      font-size: 0.9em;
+      color: #888;
+      text-align: center;
+    }
+
+    .note {
+      background-color: #e2f0d9;
+      color: #265c28;
+      padding: 10px;
+      border-left: 4px solid #28a745;
+      border-radius: 4px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>{{ candidate_name }} – {{ form_name }} Update</h2>
+    </div>
+
+    <div class="summary">
+      <div class="section-title">Summary</div>
+      <p><strong>Total Sectors:</strong> {{ total_sectors }}</p>
+      <p><strong>Total Hours:</strong> {{ total_hours }}</p>
+    </div>
+
+    <div class="topics">
+      <div class="section-title">Topic Progress</div>
+      <ul class="clean-list">
+        {{ topic_summary|safe }}
+      </ul>
+    </div>
+
+    <div class="sectors">
+      <div class="section-title">Completed Sectors</div>
+      <ul class="clean-list">
+        {{ sector_list|safe }}
+      </ul>
+    </div>
+
+    <div class="note">
+      Please review and take any necessary action.
+    </div>
+
+    <div class="footer">
+      <p>This message was generated automatically by the LMS platform.</p>
+    </div>
+  </div>
+</body>
+</html>

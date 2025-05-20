@@ -66,12 +66,17 @@
 
           <div class="w-100"></div>
 
-          {% if task.responsible_job_title and task.responsible_job_title.manager %}
-            <span class="badge rounded-pill bg-success text-white">
-              Responsible: {{ task.responsible_job_title.manager.username }}
-            </span>
+          {# ← New conditional badge #}
+          {% if task.is_employee_task %}
+            <span class="badge rounded-pill bg-info text-white">Employee Task</span>
           {% else %}
-            <span class="badge rounded-pill bg-secondary">—</span>
+            {% if task.responsible_job_title and task.responsible_job_title.manager %}
+              <span class="badge rounded-pill bg-success text-white">
+                Responsible: {{ task.responsible_job_title.manager.username }}
+              </span>
+            {% else %}
+              <span class="badge rounded-pill bg-secondary">—</span>
+            {% endif %}
           {% endif %}
 
           <div class="w-100"></div>
@@ -92,19 +97,22 @@
 
       <div class="card-footer text-end">
         <button class="btn btn-sm btn-outline-primary edit-btn me-1"
-                data-bs-toggle="modal"
-                data-bs-target="#editTaskModal"
-                data-id="{{ task.id }}"
-                data-name="{{ task.name }}"
-                data-phase="{{ task.phase }}"
-                data-timing="{{ task.timing }}"
-                data-daysbefore="{{ task.days_before }}"
-                data-responsibletitle="{{ task.responsible_job_title_id }}"
-                data-email="{{ task.responsible_email or '' }}"
-                data-jobtitles="{{ task.assigned_job_titles | map(attribute='id') | join(',') }}"
-                data-description="{{ task.description }}">
-          ✎
-        </button>
+        data-bs-toggle="modal"
+        data-bs-target="#editTaskModal"
+        data-id="{{ task.id }}"
+        data-name="{{ task.name }}"
+        data-phase="{{ task.phase }}"
+        data-timing="{{ task.timing }}"
+        data-daysbefore="{{ task.days_before }}"
+        data-responsibletitle="{{ task.responsible_job_title_id }}"
+        data-email="{{ task.responsible_email or '' }}"
+        data-jobtitles="{{ task.assigned_job_titles | map(attribute='id') | join(',') }}"
+        data-description="{{ task.description }}"
+        data-is-employee-task="{{ 1 if task.is_employee_task else 0 }}"
+        data-document-type="{{ task.document_type_id or '' }}">
+        ✎
+      </button>
+
         <button class="btn btn-sm btn-outline-danger delete-btn">🗑</button>
       </div>
 
@@ -114,63 +122,107 @@
 </div>
 
 
-<!-- Add Task Modal -->
+<!-- Create Task Modal -->
 <div class="modal fade" id="addTaskModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered modal-lg">
-    <form id="addForm" class="modal-content" method="POST" action="/create_hr_task">
+    <form id="addForm" class="modal-content" method="POST" action="{{ url_for('hr.manage_hr_tasks') }}">
       <div class="modal-header">
         <h5 class="modal-title">Add New Task</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
+
       <div class="modal-body row g-3">
+        <!-- Task Name -->
         <div class="col-md-6">
           <label class="form-label">Task Name</label>
-          <input type="text" name="name" class="form-control" required>
+          <input type="text" class="form-control" id="createName" name="name" required>
         </div>
+
+        <!-- Phase -->
         <div class="col-md-6">
           <label class="form-label">Phase</label>
-          <select name="phase" class="form-select" required>
+          <select class="form-select" id="createPhase" name="phase" required>
             <option value="onboarding">Onboarding</option>
             <option value="offboarding">Offboarding</option>
           </select>
         </div>
+
+        <!-- Employee‐Task Checkbox -->
+        <div class="col-12 form-check">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            id="createIsEmployeeTask"
+            name="is_employee_task"
+            value="on"
+          >
+          <label class="form-check-label" for="createIsEmployeeTask">
+            Assign directly to employee
+          </label>
+        </div>
+
+        <!-- Document Type (optional) -->
         <div class="col-md-6">
-          <label class="form-label">Responsible Job Title</label>
-          <select id="addResponsibleJobTitle" name="responsible_job_title_id" class="form-select" required>
-            <option value="">Select</option>
-            {% for jt in job_titles %}
-              <option value="{{ jt.id }}" data-email="{{ jt.manager.email if jt.manager else '' }}">{{ jt.title }}</option>
+          <label class="form-label">Document Type (optional)</label>
+          <select id="createDocumentType" name="document_type_id" class="form-select">
+            <option value="">— none —</option>
+            {% for dt in document_types %}
+              <option value="{{ dt.id }}">{{ dt.name }}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-6">
-          <label class="form-label">Manager Email</label>
-          <input type="email" id="addEmailInput" name="responsible_email" class="form-control" readonly required>
+
+        <!-- Responsible Job Title -->
+        <div class="col-md-6 manager-fields">
+          <label class="form-label">Responsible Job Title</label>
+          <select id="createResponsibleJobTitle" class="form-select" name="responsible_job_title_id">
+            <option value="">Select</option>
+            {% for jt in job_titles %}
+              <option value="{{ jt.id }}" data-email="{{ jt.manager.email if jt.manager else '' }}">
+                {{ jt.title }}
+              </option>
+            {% endfor %}
+          </select>
         </div>
+
+        <!-- Manager Email -->
+        <div class="col-md-6 manager-fields">
+          <label class="form-label">Manager Email</label>
+          <input type="email" class="form-control" id="createEmail" name="responsible_email">
+        </div>
+
+        <!-- Assign to Job Titles -->
         <div class="col-md-12">
           <label class="form-label">Assign to Job Titles</label>
-          <select name="assigned_job_title_ids" class="form-select" multiple required>
+          <select id="createJobTitles" class="form-select" name="assigned_job_title_ids" multiple required>
             {% for jt in job_titles %}
               <option value="{{ jt.id }}">{{ jt.title }}</option>
             {% endfor %}
           </select>
         </div>
+
+        <!-- Due Offset -->
         <div class="col-md-6">
           <label class="form-label">Due Offset (Days)</label>
-          <input type="number" name="days_before" class="form-control" placeholder="e.g. 5">
+          <input type="number" class="form-control" id="createDaysBefore" name="days_before">
         </div>
+
+        <!-- Timing -->
         <div class="col-md-6">
           <label class="form-label">Timing</label>
-          <select name="timing" class="form-select" required>
+          <select id="createTiming" class="form-select" name="timing">
             <option value="before">Before</option>
             <option value="after">After</option>
           </select>
         </div>
+
+        <!-- Description -->
         <div class="col-12">
           <label class="form-label">Description</label>
-          <textarea name="description" class="form-control" rows="3" placeholder="Optional details…"></textarea>
+          <textarea class="form-control" id="createDescription" name="description" rows="3"></textarea>
         </div>
       </div>
+
       <div class="modal-footer">
         <button type="submit" class="btn btn-success">Create Task</button>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -178,6 +230,7 @@
     </form>
   </div>
 </div>
+
 
 <!-- Edit Task Modal (same structure as add, but prefilled via JS) -->
 <div class="modal fade" id="editTaskModal" tabindex="-1">
@@ -200,16 +253,46 @@
             <option value="offboarding">Offboarding</option>
           </select>
         </div>
+        <!-- NEW: employee‐task checkbox -->
+        <div class="col-12 form-check">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            id="editIsEmployeeTask"
+            name="is_employee_task"
+            value="on"
+          >
+          <label class="form-check-label" for="editIsEmployeeTask">
+            Assign directly to employee
+          </label>
+        </div>
+        
+        <!-- Document Type (optional) -->
         <div class="col-md-6">
+          <label class="form-label">Document Type (optional)</label>
+          <select id="editDocumentType" name="document_type_id" class="form-select">
+            <option value="">— none —</option>
+            {% for dt in document_types %}
+              <option value="{{ dt.id }}">{{ dt.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- RESPONSIBLE JOB TITLE (wrap in manager-fields) -->
+        <div class="col-md-6 manager-fields">
           <label class="form-label">Responsible Job Title</label>
           <select id="editResponsibleJobTitle" class="form-select" name="responsible_job_title_id">
             <option value="">Select</option>
             {% for jt in job_titles %}
-              <option value="{{ jt.id }}" data-email="{{ jt.manager.email if jt.manager else '' }}">{{ jt.title }}</option>
+              <option value="{{ jt.id }}" data-email="{{ jt.manager.email if jt.manager else '' }}">
+                {{ jt.title }}
+              </option>
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-6">
+
+        <!-- MANAGER EMAIL (also manager-fields) -->
+        <div class="col-md-6 manager-fields">
           <label class="form-label">Manager Email</label>
           <input type="email" class="form-control" id="editEmail" name="responsible_email">
         </div>
@@ -232,10 +315,11 @@
             <option value="after">After</option>
           </select>
         </div>
-        <div class="col-12">
-          <label class="form-label">Description</label>
-          <textarea class="form-control" id="editDescription" name="description"></textarea>
-        </div>
+      <!-- Description textarea -->
+      <div class="col-12">
+        <label class="form-label">Description</label>
+        <textarea class="form-control" id="editDescription" name="description"></textarea>
+      </div>
       </div>
       <div class="modal-footer">
         <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -268,68 +352,95 @@
       new bootstrap.Popover(el);
     });
   
-    // 2. Auto-fill manager email (Add modal)
-    const addSelect = document.getElementById('addResponsibleJobTitle');
-    addSelect?.addEventListener('change', function () {
-      const email = this.selectedOptions[0]?.dataset.email || '';
-      document.getElementById('addEmailInput').value = email;
+    // 2. Auto‐fill manager email (Create modal)
+    document.getElementById('createResponsibleJobTitle')?.addEventListener('change', function() {
+      document.getElementById('createEmail').value = this.selectedOptions[0]?.dataset.email || '';
     });
   
-    // 3. Auto-fill manager email (Edit modal)
-    const editSelect = document.getElementById('editResponsibleJobTitle');
-    editSelect?.addEventListener('change', function () {
-      const email = this.selectedOptions[0]?.dataset.email || '';
-      document.getElementById('editEmail').value = email;
+    // 3. Auto‐fill manager email (Edit modal)
+    document.getElementById('editResponsibleJobTitle')?.addEventListener('change', function() {
+      document.getElementById('editEmail').value = this.selectedOptions[0]?.dataset.email || '';
     });
   
-    // 4. Delete & Edit logic
+    // 4. Toggle manager‐fields when "Assign directly to employee" is checked
+    [
+      { modalId: 'addTaskModal',    checkboxId: 'createIsEmployeeTask' },
+      { modalId: 'editTaskModal',   checkboxId: 'editIsEmployeeTask'   }
+    ].forEach(({ modalId, checkboxId }) => {
+      const modalEl  = document.getElementById(modalId);
+      const checkbox = document.getElementById(checkboxId);
+      if (!modalEl || !checkbox) return;
+  
+      const mgrFields = Array.from(modalEl.querySelectorAll('.manager-fields'));
+      const toggleMgr = () => {
+        const hide = checkbox.checked;
+        mgrFields.forEach(div => {
+          div.style.display = hide ? 'none' : '';
+          div.querySelectorAll('input, select').forEach(el => el.required = !hide);
+        });
+      };
+  
+      checkbox.addEventListener('change', toggleMgr);
+      modalEl.addEventListener('show.bs.modal', toggleMgr);
+    });
+  
+    // 5. Handle Delete / Edit / View-Assigned buttons
     const grid = document.getElementById('taskGrid');
     grid?.addEventListener('click', e => {
       const target = e.target;
   
-      // Handle Delete
+      // Delete
       if (target.matches('.delete-btn')) {
-        const cardCol = target.closest('[class^="col-"]');
-        const taskId = cardCol?.dataset.id;
-        if (!taskId) return;
-        if (confirm('Delete this task?')) {
+        const col    = target.closest('[data-id]');
+        const taskId = col?.dataset.id;
+        if (taskId && confirm('Delete this task?')) {
           fetch(`/delete_hr_task/${taskId}`, { method: 'POST' })
-            .then(res => {
-              if (res.ok) cardCol.remove();
-              else alert('Error deleting task.');
-            });
+            .then(res => res.ok ? col.remove() : alert('Error deleting task.'));
         }
       }
   
-      // Handle Edit
+      // Edit
       if (target.matches('.edit-btn')) {
-        const btn = target;
+        const btn     = target;
         const modalEl = document.getElementById('editTaskModal');
-        const mf = selector => modalEl.querySelector(selector);
-  
-        mf('#editTaskId').value = btn.dataset.id;
-        mf('#editName').value = btn.dataset.name;
-        mf('#editPhase').value = btn.dataset.phase;
-        mf('#editTiming').value = btn.dataset.timing;
-        mf('#editDaysBefore').value = btn.dataset.daysbefore;
-        mf('#editResponsibleJobTitle').value = btn.dataset.responsibletitle;
-        mf('#editEmail').value = btn.dataset.email;
-        mf('#editDescription').value = btn.dataset.description;
-  
+        if (!modalEl) return;
+        const mf = sel => modalEl.querySelector(sel);
+
+        // Basic fields
+        mf('#editTaskId').value                 = btn.dataset.id;
+        mf('#editName').value                   = btn.dataset.name;
+        mf('#editPhase').value                  = btn.dataset.phase;
+        mf('#editTiming').value                 = btn.dataset.timing;
+        mf('#editDaysBefore').value             = btn.dataset.daysbefore;
+        mf('#editResponsibleJobTitle').value    = btn.dataset.responsibletitle;
+        mf('#editEmail').value                  = btn.dataset.email;
+        mf('#editDescription').value            = btn.dataset.description;
+
+        // Employee‐task checkbox
+        mf('#editIsEmployeeTask').checked       = btn.dataset.isEmployeeTask === '1';
+
         // Assigned job titles
         const ids = (btn.dataset.jobtitles || '').split(',');
-        const selectEl = document.getElementById('editJobTitles');
-        Array.from(selectEl.options).forEach(opt => {
+        Array.from(mf('#editJobTitles').options).forEach(opt => {
           opt.selected = ids.includes(opt.value);
         });
-  
+
+        // Document‐type dropdown
+        const docSel = mf('#editDocumentType');
+        if (docSel) {
+          // blank or real id
+          docSel.value = btn.dataset.documentType || '';
+        }
+
+        // Finally show
         new bootstrap.Modal(modalEl).show();
       }
   
-      // Handle Assigned View Button
+      // View Assigned Job Titles
       if (target.matches('.view-assigned-btn')) {
-        const titles = target.dataset.assigned.split(',');
-        const ul = document.getElementById('assignedList');
+        const titles = (target.dataset.assigned || '').split(',');
+        const ul     = document.getElementById('assignedList');
+        if (!ul) return;
         ul.innerHTML = '';
         titles.forEach(t => {
           const li = document.createElement('li');
@@ -341,61 +452,57 @@
       }
     });
   
-    // 5. Submit Edit Form
-    const editForm = document.getElementById('editForm');
-    editForm?.addEventListener('submit', function (e) {
+    // 6. Submit Edit Form via AJAX
+    document.getElementById('editForm')?.addEventListener('submit', e => {
       e.preventDefault();
-  
       const taskId = document.getElementById('editTaskId').value;
       const payload = {
-        name: document.getElementById('editName').value,
-        phase: document.getElementById('editPhase').value,
-        timing: document.getElementById('editTiming').value,
-        days_before: parseInt(document.getElementById('editDaysBefore').value, 10) || 0,
-        responsible_email: document.getElementById('editEmail').value,
+        name:                   document.getElementById('editName').value,
+        phase:                  document.getElementById('editPhase').value,
+        timing:                 document.getElementById('editTiming').value,
+        days_before:            parseInt(document.getElementById('editDaysBefore').value, 10) || 0,
+        responsible_email:      document.getElementById('editEmail').value,
         responsible_job_title_id: document.getElementById('editResponsibleJobTitle').value,
         assigned_job_title_ids: Array.from(document.getElementById('editJobTitles').selectedOptions).map(o => o.value),
-        description: document.getElementById('editDescription').value
+        description:            document.getElementById('editDescription').value
       };
-  
       fetch(`/update_hr_task/${taskId}`, {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body:    JSON.stringify(payload)
       }).then(res => {
         if (res.ok) window.location.reload();
         else alert('Failed to update task.');
       });
     });
   
-    // 6. Live Search
-    const searchInput = document.getElementById('taskSearch');
-    searchInput?.addEventListener('input', function () {
+    // 7. Live Search
+    document.getElementById('taskSearch')?.addEventListener('input', function() {
       const q = this.value.toLowerCase();
-      document.querySelectorAll('#taskGrid .card').forEach(card => {
-        const title = card.querySelector('.card-title')?.textContent.toLowerCase() || '';
-        card.parentElement.classList.toggle('d-none', !title.includes(q));
+      document.querySelectorAll('#taskGrid [data-id]').forEach(col => {
+        const card   = col.querySelector('.card');
+        const title  = card?.querySelector('.card-title')?.textContent.toLowerCase() || '';
+        col.classList.toggle('d-none', !title.includes(q));
       });
     });
   
-    // 7. Phase Filter
-    phaseFilter?.addEventListener('change', function () {
-      const selectedPhase = this.value.toLowerCase(); // e.g. "onboarding", "offboarding"
+    // 8. Phase Filter
+    document.getElementById('phaseFilter')?.addEventListener('change', function() {
+      const sel = this.value.toLowerCase();
       document.querySelectorAll('#taskGrid [data-phase]').forEach(col => {
-        const taskPhase = col.dataset.phase;
-        const shouldShow = !selectedPhase || taskPhase === selectedPhase;
-        col.classList.toggle('d-none', !shouldShow);
+        col.classList.toggle('d-none', sel && col.dataset.phase !== sel);
       });
     });
-
   
-    // 8. Clean up backdrop after closing edit modal
-    const editModalEl = document.getElementById('editTaskModal');
-    editModalEl?.addEventListener('hidden.bs.modal', () => {
+    // 9. Cleanup backdrop after closing Edit modal
+    document.getElementById('editTaskModal')?.addEventListener('hidden.bs.modal', () => {
       document.body.classList.remove('modal-open');
       document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
     });
   });
+
+  
   </script>
+  
   
 {% endblock %}

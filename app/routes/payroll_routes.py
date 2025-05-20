@@ -308,13 +308,12 @@ def delete_payroll_period(payroll_id):
 @payroll_bp.route('/payroll_dashboard', methods=['GET'])
 @login_required
 def payroll_dashboard():
-    # ✅ Only allow access to payroll dashboard for users with payroll access
     if not current_user.job_title or not current_user.job_title.has_payroll_access:
         flash("You do not have permission to access the payroll dashboard.", "danger")
 
     payroll_periods = PayrollPeriod.query.order_by(PayrollPeriod.start_date.desc()).all()
     selected_payroll_period_id = request.args.get('payroll_period_id', type=int)
-    selected_tab = request.args.get('status', 'Pending')  # Default tab is 'Pending'
+    selected_tab = request.args.get('status', 'Pending')
 
     employees = {
         "Approved": [],
@@ -325,22 +324,22 @@ def payroll_dashboard():
 
     if selected_payroll_period_id:
         if current_user.is_admin:
-            # ✅ Admins see all employees with timesheet access
             employee_query = (
                 db.session.query(User)
                 .join(JobTitle, User.job_title_id == JobTitle.id)
                 .filter(JobTitle.has_timesheet_access == True)
                 .all()
             )
-        
         elif current_user.job_title:
-            # ✅ Managers only see staff at their location
             subordinate_roles = current_user.job_title.get_all_subordinate_roles()
+            subordinate_roles.append(current_user.job_title.id)
+
             employee_query = (
                 db.session.query(User)
                 .join(JobTitle, User.job_title_id == JobTitle.id)
-                .filter(User.location_id == current_user.location_id)  # ✅ Only show staff at the same location
-                .filter(User.job_title_id.in_(subordinate_roles), JobTitle.has_timesheet_access == True)
+                .filter(User.job_title_id.in_(subordinate_roles))
+                .filter(User.id != current_user.id)  # 👈 exclude self
+                .filter(JobTitle.has_timesheet_access == True)
                 .all()
             )
         else:
@@ -360,6 +359,7 @@ def payroll_dashboard():
         selected_payroll_period_id=selected_payroll_period_id,
         selected_tab=selected_tab
     )
+
 
 @payroll_bp.route('/payroll_reports', methods=['GET'])
 @login_required

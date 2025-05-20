@@ -365,8 +365,12 @@ document.addEventListener('DOMContentLoaded', function () {
             <td>${rowCount}</td>
             <td><input type="date" name="date_${rowCount}" class="form-control input-lg" required></td>
             <td><input type="text" name="variant_${rowCount}" class="form-control input-lg" required></td>
-            <td><input type="text" name="departure_${rowCount}" class="form-control input-lg" required></td>
-            <td><input type="text" name="arrival_${rowCount}" class="form-control input-lg" required></td>
+            <td><input type="text" name="departure_${rowCount}" class="form-control input-lg"
+                    required maxlength="3" pattern="[A-Z]{3}" title="Must be 3 uppercase letters" 
+                    data-bs-toggle="tooltip" data-bs-placement="top" data-bs-trigger="manual"></td>
+            <td><input type="text" name="arrival_${rowCount}" class="form-control input-lg"
+                    required maxlength="3" pattern="[A-Z]{3}" title="Must be 3 uppercase letters"
+                    data-bs-toggle="tooltip" data-bs-placement="top" data-bs-trigger="manual"></td>
             <!-- <td>1</td>  Ensure this is always 1 and not editable -->
             <td><input type="number" name="flight_time_total_${rowCount}" class="form-control input-lg" style="width: 100px;" min="0" step="0.1"></td>
             <!-- <td><input type="number" name="if_time_sector_${rowCount}" class="form-control input-lg" style="width: 75px;" min="0" step="1" value="0"></td> -->
@@ -411,7 +415,67 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
             // Show the modal to add notes
-            activeSectorRow = row; // Save the current row
+            // Collect data from the row
+            const depInput = row.querySelector(`[name^="departure_"]`);
+            const arrInput = row.querySelector(`[name^="arrival_"]`);
+            const dep = depInput.value.trim().toUpperCase();
+            const arr = arrInput.value.trim().toUpperCase();
+
+            // Clear any previous validation feedback
+            depInput.classList.remove("is-invalid");
+            arrInput.classList.remove("is-invalid");
+
+            let hasError = false;
+
+            if (dep.length !== 3 || !/^[A-Z]{3}$/.test(dep)) {
+                depInput.classList.add("is-invalid");
+                const tooltip = bootstrap.Tooltip.getInstance(depInput) || new bootstrap.Tooltip(depInput);
+                tooltip.show();
+                hasError = true;
+            }
+
+            if (arr.length !== 3 || !/^[A-Z]{3}$/.test(arr)) {
+                arrInput.classList.add("is-invalid");
+                const tooltip = bootstrap.Tooltip.getInstance(arrInput) || new bootstrap.Tooltip(arrInput);
+                tooltip.show();
+                hasError = true;
+            }
+
+            if (hasError) {
+                return; // Stop if either field is invalid
+            }
+
+            // Set values to uppercase and update the inputs
+            depInput.value = dep;
+            arrInput.value = arr;
+            // Auto-hide tooltip on correction
+            depInput.addEventListener('input', () => {
+                depInput.classList.remove("is-invalid");
+                const tooltip = bootstrap.Tooltip.getInstance(depInput);
+                if (tooltip) tooltip.hide();
+            });
+
+            arrInput.addEventListener('input', () => {
+                arrInput.classList.remove("is-invalid");
+                const tooltip = bootstrap.Tooltip.getInstance(arrInput);
+                if (tooltip) tooltip.hide();
+            });
+            // Continue building sectorData
+            activeSectorData = {
+                form_id: formIdElement.value,
+                date: row.querySelector(`[name^="date_"]`).value,
+                variant: row.querySelector(`[name^="variant_"]`).value,
+                departure: dep,
+                arrival: arr,
+                flight_time_sector: 1,
+                flight_time_total: row.querySelector(`[name^="flight_time_total_"]`).value,
+                takeoff: row.querySelector(`[name^="takeoff_"]`).value,
+                landing: row.querySelector(`[name^="landing_"]`).value,
+                sector_id: e.target.dataset.sectorId,
+            };
+
+            // ✅ Show the notes modal only after validation passes
+            activeSectorRow = row;
             const notesModal = new bootstrap.Modal(document.getElementById('notesModal'));
             notesModal.show();
         }
@@ -420,45 +484,78 @@ document.addEventListener('DOMContentLoaded', function () {
     function saveSector(row) {
     const sectorId = row.querySelector('.save-row').dataset.sectorId;
 
+    const depInput = row.querySelector(`[name^="departure_"]`);
+    const arrInput = row.querySelector(`[name^="arrival_"]`);
+
+    const dep = depInput.value.trim().toUpperCase();
+    const arr = arrInput.value.trim().toUpperCase();
+
+    // Clear previous errors
+    depInput.classList.remove("is-invalid");
+    arrInput.classList.remove("is-invalid");
+
+    // Inline flag handling
+    let hasError = false;
+
+    if (dep.length !== 3 || !/^[A-Z]{3}$/.test(dep)) {
+        depInput.classList.add("is-invalid");
+        depInput.setCustomValidity("Must be exactly 3 uppercase letters (e.g. AKL).");
+        hasError = true;
+    }
+
+    if (arr.length !== 3 || !/^[A-Z]{3}$/.test(arr)) {
+        arrInput.classList.add("is-invalid");
+        arrInput.setCustomValidity("Must be exactly 3 uppercase letters (e.g. WAG).");
+        hasError = true;
+    }
+
+    if (hasError) {
+        return;
+    }
+
+    depInput.setCustomValidity("");
+    arrInput.setCustomValidity("");
+
     const sectorData = {
         form_id: formIdElement.value,
         date: row.querySelector(`[name^="date_"]`).value,
         variant: row.querySelector(`[name^="variant_"]`).value,
-        departure: row.querySelector(`[name^="departure_"]`).value,
-        arrival: row.querySelector(`[name^="arrival_"]`).value,
-        flight_time_sector: row.querySelector(`[name^="flight_time_sector_"]`).value,
+        departure: dep,
+        arrival: arr,
+        flight_time_sector: 1,
         flight_time_total: row.querySelector(`[name^="flight_time_total_"]`).value,
-        //if_time_sector: row.querySelector(`[name^="if_time_sector_"]`).value,
-        //if_time_total: row.querySelector(`[name^="if_time_total_"]`).value,
-        //type: row.querySelector(`[name^="type_"]`).value || "",
         takeoff: row.querySelector(`[name^="takeoff_"]`).value,
         landing: row.querySelector(`[name^="landing_"]`).value,
         sector_id: sectorId,
     };
 
-    // Validate required fields
-    if (!sectorData.date || !sectorData.variant || !sectorData.departure || !sectorData.arrival) {
+    // Check for missing required fields again (optional)
+    if (!sectorData.date || !sectorData.variant) {
         alert("Please fill in all required fields.");
         return;
     }
 
-    // Save sector to the server
+    // Send to server
     fetch('/save_sector', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sectorData),
     })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                row.classList.add('bg-success'); // Highlight saved row
-                updateTotals(); // Update totals after saving
-            } else {
-                alert("Failed to save sector.");
-            }
-        })
-        .catch(error => console.error("Error saving sector:", error));
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            row.classList.add('bg-success');  // highlight saved row
+            updateTotals();
+        } else {
+            alert("Failed to save sector.");
+        }
+    })
+    .catch(error => {
+        console.error("Error saving sector:", error);
+        alert("An error occurred while saving.");
+    });
 }
+
 
 
     // Save Notes and Send Data to the Server
@@ -553,13 +650,8 @@ function updateTotals() {
             })
             .catch(error => console.error("Error updating totals:", error));
 }
-
-// Ensure totals are updated only when a row is saved
-document.querySelectorAll('.save-row').forEach(button => {
-    button.addEventListener('click', () => {
-    });
-});
-
+    
+        
 document.addEventListener('DOMContentLoaded', function () {
     const releaseButton = document.getElementById('release-candidate');
     const confirmReleaseButton = document.getElementById('confirmRelease');
@@ -633,7 +725,9 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 });
-
+document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+    new bootstrap.Tooltip(el);
+});
 </script>
 
 {% endblock %}

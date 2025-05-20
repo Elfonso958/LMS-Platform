@@ -3,7 +3,7 @@
 {% block content %}
 <div class="container mt-5">
     <h1>Edit Course</h1>
-    <form method="POST" action="{{ url_for('edit_course', course_id=course.id) }}">
+    <form method="POST" action="{{ url_for('course.edit_course', course_id=course.id) }}">
         <div class="mb-3">
             <label for="title" class="form-label">Course Title</label>
             <input type="text" class="form-control" id="title" name="title" value="{{ course.title }}" required>

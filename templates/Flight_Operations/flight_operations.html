@@ -235,25 +235,44 @@ document.addEventListener("DOMContentLoaded", async function () {
     await loadAirportList();  // <-- Make sure this is here
 });
 
-// ✅ Function to compare and highlight crew changes correctly
 function highlightCrew(originalCrew, updatedCrew) {
-    if (!updatedCrew || !originalCrew) return "";
-    const formatCrewList = crew =>
-        Array.isArray(crew)
-            ? crew
-                  .map(member => 
-                      Array.isArray(member) 
-                          ? `${member[1]} ${member[2]}`
-                          : member.firstName && member.surname
-                              ? `${member.firstName} ${member.surname}`
-                              : member
-                  )
-                  .sort()
-                  .join(", ")
-            : crew;
-    const formattedOriginal = formatCrewList(originalCrew);
-    const formattedUpdated = formatCrewList(updatedCrew);
-    return formattedOriginal !== formattedUpdated ? 'style="background-color: yellow; font-weight: bold;"' : "";
+  // 1. If there's no update object at all, skip highlighting
+  if (!updatedCrew) {
+    return "";
+  }
+
+  // 2. Normalize stringified JSON to array, or leave arrays alone
+  const normalize = raw => {
+    if (!raw || raw === "No Crew Assigned") return [];
+    if (typeof raw === "string") {
+      try { return JSON.parse(raw); }
+      catch { return []; }
+    }
+    return Array.isArray(raw) ? raw : [];
+  };
+
+  const origArr = normalize(originalCrew);
+  const updArr  = normalize(updatedCrew);
+
+  // 3. If either side is empty, that means "no crew" → no real compare
+  if (origArr.length === 0 || updArr.length === 0) {
+    return "";
+  }
+
+  // 4. Extract just the username (2nd slot) and sort
+  const names = arr =>
+    arr
+      .map(slot => Array.isArray(slot) ? slot[1] : "")
+      .filter(n => n)
+      .sort();
+
+  const origNames = names(origArr).join(",");
+  const updNames  = names(updArr).join(",");
+
+  // 5. Highlight only if they differ
+  return origNames !== updNames
+    ? 'style="background-color: yellow; font-weight: bold;"'
+    : "";
 }
 
 // ✅ Fetch & Display Flights
@@ -331,21 +350,29 @@ async function fetchAndDisplayFlights(selectedDate = null) {
 
                 // ✅ Function to format crew names
                 function formatCrew(crewList) {
-                    if (!crewList || crewList === "No Crew Assigned") {
-                        return "No Crew Assigned";
-                    }
-                    return Array.isArray(crewList)
-                        ? crewList
-                              .map(member =>
-                                  Array.isArray(member)
-                                      ? `${member[1]} ${member[2]}`
-                                      : member.firstName && member.surname
-                                      ? `${member.firstName} ${member.surname}`
-                                      : member
-                              )
-                              .sort()
-                              .join(", ")
-                        : crewList;
+                  if (!Array.isArray(crewList) || crewList.length === 0) {
+                    return "No Crew Assigned";
+                  }
+
+                  // Define rank order
+                  const RANK = {
+                    "Captain":        0,
+                    "First Officer":  1,
+                    "Flight Attendant": 2,
+                    "Other":          99
+                  };
+
+                  return crewList
+                    .slice() // clone so we don’t mutate the original
+                    .sort((a, b) => {
+                      // sort by category rank, then by name
+                      const rA = RANK[a.category]  ?? RANK.Other;
+                      const rB = RANK[b.category]  ?? RANK.Other;
+                      if (rA !== rB) return rA - rB;
+                      return a.name.localeCompare(b.name);
+                    })
+                    .map(member => member.name)
+                    .join(", ");
                 }
 
                 const hasUpdate = updated && updated.id;
@@ -369,9 +396,10 @@ async function fetchAndDisplayFlights(selectedDate = null) {
                     <td ${highlightChange(original?.arrivalScheduled, updated?.arrivalScheduled)}>
                         ${hasUpdate ? updated?.arrivalScheduled || "N/A" : ""}
                     </td>
-                    <td ${highlightCrew(original?.crew, updated?.crew)}>
-                        ${hasUpdate ? formatCrew(updated?.crew) : ""}
+                    <td ${ hasUpdate && highlightCrew(original?.crew, updated?.crew) }>
+                    ${ hasUpdate ? formatCrew(updated?.crew) : "" }
                     </td>
+
 
                     <!-- Original Flight Data (Instead of) -->
                     <td>${original?.flightLineDescription || "N/A"}</td>

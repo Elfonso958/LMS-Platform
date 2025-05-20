@@ -12,26 +12,32 @@ from app.scheduler import scheduler
 from flask import g
 from app.scheduler_jobs import medical_alerts
 from datetime import datetime
+from app.utils import format_ddmmyyyy, format_human_date
 
 def create_app():
     """Application Factory"""
 
-    # Load the correct .env file based on FLASK_CONFIG
-    env_file = ".env.dev" if os.getenv("FLASK_CONFIG") == "config.dev" else ".env.prod"
-    load_dotenv(env_file)
+    # Decide which env/config to load
+    flask_env = os.getenv('FLASK_ENV', 'development').lower()
+    if flask_env == 'production':
+        load_dotenv('.env.prod', override=False)
+        config_name = 'config.prod'
+    else:
+        load_dotenv('.env.dev',  override=False)
+        config_name = 'config.dev'
 
     app = Flask(__name__, template_folder='../templates', static_folder='../static')
+    app.config.from_object(config_name)
+    app.config['FLASK_CONFIG'] = config_name
+
+    # Jinja filters   
+    app.jinja_env.filters['human_date'] = format_human_date
+    app.jinja_env.filters['format_ddmmyyyy'] = format_ddmmyyyy
 
     @app.context_processor
     def inject_config():
-        return dict(config=app.config)
-
-    # 🔁 Load config from environment variable (default to dev)
-    config_name = os.getenv('FLASK_CONFIG', 'config.dev')
-    app.config.from_object(config_name)
-    app.config['FLASK_CONFIG'] = config_name
-    app.jinja_env.filters['human_date'] = format_human_date
-    
+        return dict(config=app.config)  
+      
     # Initialize extensions
     db.init_app(app)
     mail.init_app(app)
@@ -129,60 +135,60 @@ def inject_nav_structure():
             return []
 
         role_ids = [r.roleID for r in user.roles]
+        job_title_id = user.job_title_id
         valid_endpoints = current_app.view_functions.keys()
 
-        # Admin sees all
-        if user.is_admin:
-            allowed_items = NavItem.query.all()
-        else:
-            allowed_items = db.session.query(NavItem).outerjoin(NavItemPermission).filter(
-                (NavItemPermission.role_id.in_(role_ids)) | (NavItem.inherit_roles == True)
-            ).all()
+        # Gather all nav items allowed via role or job title
+        permissions = NavItemPermission.query.filter(
+            (NavItemPermission.role_id.in_(role_ids)) |
+            (NavItemPermission.job_title_id == job_title_id)
+        ).all()
 
-        headers = [item for item in allowed_items if item.parent_id is None]
-        sorted_headers = sorted(headers, key=lambda h: h.order if h.order is not None else 9999)
+        allowed_nav_ids = {p.nav_item_id for p in permissions}
+
+        def is_allowed(nav_id):
+            return nav_id in allowed_nav_ids
+
+        headers = NavItem.query.filter_by(parent_id=None).order_by(NavItem.order).all()
 
         nav_structure = []
-        for header in sorted_headers:
-            header_roles = [p.role_id for p in NavItemPermission.query.filter_by(nav_item_id=header.id)]
-            show_header = user.is_admin or any(role_id in role_ids for role_id in header_roles)
+        for header in headers:
+            if not (is_allowed(header.id) or user.is_admin):
+                continue
 
-            children = [c for c in allowed_items if c.parent_id == header.id]
-            sorted_children = sorted(children, key=lambda c: c.order if c.order is not None else 9999)
+            children = []
+            for child in sorted(header.children, key=lambda c: c.order or 0):
+                # Get permissions for this child
+                child_perms = NavItemPermission.query.filter_by(nav_item_id=child.id).all()
+                child_roles = [p.role_id for p in child_perms if p.role_id is not None]
+                child_jobs  = [p.job_title_id for p in child_perms if p.job_title_id is not None]
 
-            child_items = []
-            for child in sorted_children:
-                child_roles = [p.role_id for p in NavItemPermission.query.filter_by(nav_item_id=child.id)]
-                # ✅ Allow if user has direct access or child is set to inherit and header grants access
                 allow_child = (
                     user.is_admin
-                    or any(role_id in role_ids for role_id in child_roles)
-                    or (child.inherit_roles and any(role_id in role_ids for role_id in header_roles))
+                    or any(rid in role_ids for rid in child_roles)
+                    or (job_title_id and job_title_id in child_jobs)
+                    or (
+                        child.inherit_roles and is_allowed(header.id)
+                    )
                 )
+
                 if child.endpoint in valid_endpoints and allow_child:
-                    child_items.append({
+                    children.append({
                         "label": child.label,
                         "endpoint": child.endpoint
                     })
 
-            if show_header or child_items:
-                nav_structure.append({
-                    "label": header.label,
-                    "endpoint": header.endpoint if header.endpoint in valid_endpoints else None,
-                    "children": child_items
-                })
+            nav_structure.append({
+                "label": header.label,
+                "endpoint": header.endpoint if header.endpoint in valid_endpoints else None,
+                "children": children
+            })
+
+        # ✅ Debug output to confirm what's visible
+        print("=== FINAL NAV STRUCTURE ===")
+        import pprint
+        pprint.pprint(nav_structure)
 
         return nav_structure
 
     return dict(user_nav_items=get_nav_for_user(current_user))
-
-def format_human_date(value):
-    if isinstance(value, datetime):
-        return value.strftime('%A %d %B')  # e.g., Monday 11 May
-    elif isinstance(value, str):
-        try:
-            parsed = datetime.strptime(value, "%Y-%m-%d")
-            return parsed.strftime('%A %d %B')
-        except ValueError:
-            return value
-    return value

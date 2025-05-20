@@ -27,30 +27,33 @@ def send_email_to_training_team(mail, app, form_id, total_sectors, total_hours):
             app.logger.warning("Email configuration not found.")
             return
 
-        # Define the thresholds
-        thresholds = set(config.get_line_training_thresholds())
-
-        # Check if the current total sectors match any threshold
-        if total_sectors not in thresholds:
-            app.logger.info(f"Total sectors {total_sectors} does not match any threshold. Email not sent.")
-            return
-
-        # Fetch the form with eager-loaded topics and tasks
+        # Fetch the form, template, user, topics, tasks
         form = UserLineTrainingForm.query.options(
-            joinedload(UserLineTrainingForm.topics).joinedload(Topic.tasks)
+            joinedload(UserLineTrainingForm.topics).joinedload(Topic.tasks),
+            joinedload(UserLineTrainingForm.template),
+            joinedload(UserLineTrainingForm.user)
         ).get(form_id)
 
-        if not form:
-            app.logger.warning(f"No form found with ID {form_id}. Email not sent.")
+        if not form or not form.template:
+            app.logger.warning(f"No form or template found for ID {form_id}.")
             return
 
-        # Fetch the form name
-        form_name = form.template.name if form.template and form.template.name else "Unknown Form"
+        # ✅ Thresholds from the form template
+        sector_thresholds = []
+        if form.template.threshold_total_sectors:
+            sector_thresholds = [
+                int(s.strip()) for s in form.template.threshold_total_sectors.split(',') if s.strip().isdigit()
+            ]
 
-        # Fetch the candidate's name
-        candidate_name = form.user.username if form.user and form.user.username else "Unknown Candidate"
+        if total_sectors not in sector_thresholds:
+            app.logger.info(f"Total sectors {total_sectors} does not match any form template threshold. Email not sent.")
+            return
 
-        # Fetch training team emails based on role IDs
+        # Fetch the form name and candidate
+        form_name = form.template.name or "Unknown Form"
+        candidate_name = form.user.username or "Unknown Candidate"
+
+        # Get training team recipients
         role_ids = config.get_line_training_roles()
         if not role_ids:
             app.logger.warning("No role IDs found for Training Team.")
@@ -62,179 +65,56 @@ def send_email_to_training_team(mail, app, form_id, total_sectors, total_hours):
             app.logger.warning("No email recipients found for Training Team.")
             return
 
-        # Calculate percentage completed for topics
+        # Build topic progress list
         topic_details = []
         for topic in form.topics:
             total_tasks = len(topic.tasks)
-            completed_tasks = sum(
-                1 for task in topic.tasks if len(task.completions.all()) > 0
-            )
+            completed_tasks = sum(1 for task in topic.tasks if task.completions.count() > 0)
             percentage = round((completed_tasks / total_tasks * 100), 2) if total_tasks > 0 else 0
             topic_details.append(f"<li><strong>{topic.name}</strong>: {percentage}% completed</li>")
 
-        # Fetch completed sectors
+        # Build sector list
         completed_sectors = Sector.query.filter_by(form_id=form_id).all()
         sector_list = "".join(
-            [
-                f"<li>{sector.dep} to {sector.arr} on {sector.date.strftime('%d-%m-%Y')}</li>"
-                for sector in completed_sectors
-            ]
+            f"<li>{s.dep} to {s.arr} on {s.date.strftime('%d-%m-%Y')}</li>" for s in completed_sectors
         )
 
-        # Prepare email content
         topic_summary = "".join(topic_details)
 
-        # If 20 sectors are completed, modify the email content
+        # Choose subject and template
         if total_sectors == 20:
             subject = f"{candidate_name} - {form_name} Ready for Supervisor Release"
-            body = f"""
-            <html>
-            <head>
-            <style>
-                body {{
-                    font-family: Arial, sans-serif;
-                    line-height: 1.6;
-                }}
-                .header {{
-                    background-color: #f8d7da;
-                    color: #721c24;
-                    padding: 10px;
-                    border: 1px solid #f5c6cb;
-                    border-radius: 5px;
-                    margin-bottom: 20px;
-                }}
-                .summary {{
-                    margin-bottom: 20px;
-                }}
-                .summary strong {{
-                    color: #343a40;
-                }}
-                .topics, .sectors {{
-                    margin-bottom: 20px;
-                }}
-                .topics ul, .sectors ul {{
-                    list-style-type: none;
-                    padding: 0;
-                }}
-                .topics li, .sectors li {{
-                    background-color: #f1f3f5;
-                    margin: 5px 0;
-                    padding: 10px;
-                    border-radius: 5px;
-                }}
-                .release-button {{
-                    display: inline-block;
-                    padding: 10px 20px;
-                    font-size: 16px;
-                    font-weight: bold;
-                    color: white;
-                    background-color: #28a745;
-                    text-align: center;
-                    border-radius: 5px;
-                    text-decoration: none;
-                }}
-                .release-button:hover {{
-                    background-color: #218838;
-                }}
-            </style>
-            </head>
-            <body>
-            <div class="header">
-                <h2>{candidate_name} - {form_name} Ready for Supervisor Release</h2>
-            </div>
-            <div class="summary">
-                <p><strong>Total Sectors:</strong> {total_sectors}</p>
-                <p><strong>Total Hours:</strong> {total_hours:.2f}</p>
-            </div>
-            <div class="topics">
-                <h3>Topic Progress</h3>
-                <ul>
-                    {topic_summary}
-                </ul>
-            </div>
-            <div class="sectors">
-                <h3>Completed Sectors</h3>
-                <ul>
-                    {sector_list}
-                </ul>
-            </div>
-            <p>The candidate has completed 20 sectors and is now ready for supervisor release.</p>
-            <p><a href="{app.config['BASE_URL']}/confirm_release/{form_id}" class="release-button">Review & Release Candidate</a></p>
-            </body>
-            </html>
-            """        
+            body = render_template(
+                'emails/line_training_ready_release.html',
+                candidate_name=candidate_name,
+                form_name=form_name,
+                total_sectors=total_sectors,
+                total_hours=f"{total_hours:.2f}",
+                topic_summary=topic_summary,
+                sector_list=sector_list,
+                confirm_release_url=f"{app.config['BASE_URL']}/examiners/line_training_form/{form_id}"
+            )
         else:
             subject = f"{candidate_name} - {form_name} Update"
-            body = f"""
-            <html>
-            <head>
-                <style>
-                    body {{
-                        font-family: Arial, sans-serif;
-                        line-height: 1.6;
-                    }}
-                    .header {{
-                        background-color: #f8d7da;
-                        color: #721c24;
-                        padding: 10px;
-                        border: 1px solid #f5c6cb;
-                        border-radius: 5px;
-                        margin-bottom: 20px;
-                    }}
-                    .summary {{
-                        margin-bottom: 20px;
-                    }}
-                    .summary strong {{
-                        color: #343a40;
-                    }}
-                    .topics, .sectors {{
-                        margin-bottom: 20px;
-                    }}
-                    .topics ul, .sectors ul {{
-                        list-style-type: none;
-                        padding: 0;
-                    }}
-                    .topics li, .sectors li {{
-                        background-color: #f1f3f5;
-                        margin: 5px 0;
-                        padding: 10px;
-                        border-radius: 5px;
-                    }}
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h2>{candidate_name} - {form_name} Update</h2>
-                </div>
-                <div class="summary">
-                    <p><strong>Total Sectors:</strong> {total_sectors}</p>
-                    <p><strong>Total Hours:</strong> {total_hours:.2f}</p>
-                </div>
-                <div class="topics">
-                    <h3>Topic Progress</h3>
-                    <ul>
-                        {topic_summary}
-                    </ul>
-                </div>
-                <div class="sectors">
-                    <h3>Completed Sectors</h3>
-                    <ul>
-                        {sector_list}
-                    </ul>
-                </div>
-                <p>Please review and take necessary action.</p>
-            </body>
-            </html>
-            """
+            body = render_template(
+                'emails/line_training_update.html',
+                candidate_name=candidate_name,
+                form_name=form_name,
+                total_sectors=total_sectors,
+                total_hours=f"{total_hours:.2f}",
+                topic_summary=topic_summary,
+                sector_list=sector_list
+            )
 
         msg = Message(subject, recipients=recipients, sender=app.config['MAIL_DEFAULT_SENDER'])
-        msg.html = body  # Set the HTML content
+        msg.html = body
 
-        # Send email asynchronously
         Thread(target=send_async_email, args=(app, msg)).start()
         app.logger.info(f"Email queued to Training Team: {', '.join(recipients)}")
+
     except Exception as e:
         app.logger.error(f"Error queuing email: {str(e)}")
+
 
 def Send_Release_To_Supervisor_Email(app, candidate, form_name, form_id, total_hours, total_takeoffs, total_landings, associated_roles):
     try:
@@ -721,13 +601,15 @@ def send_email(subject, recipients, body=None, html=None, cc=None, attachments=N
 
     Thread(target=send_message).start()
 
-def send_hr_task_email(task, user, subject="New HR Task Assigned", template='emails/hr_task_assigned.html'):
-    if not task.responsible_email:
+def send_hr_task_email(task, template, user, subject="New HR Task Assigned", template_name='emails/hr_task_assigned.html'):
+    task_template = task.task_template
+
+    if not task_template or not task_template.responsible_email:
         return
 
     msg = Message(
         subject=subject,
-        recipients=[task.responsible_email],
-        html=render_template(template, task=task, user=user)
+        recipients=[task_template.responsible_email],
+        html=render_template(template_name, task=task, task_template=template, user=user)
     )
     mail.send(msg)

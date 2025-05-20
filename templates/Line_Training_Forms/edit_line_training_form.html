@@ -4,19 +4,80 @@
 
 {% block content %}
 <div class="container mt-5">
-    <h1>Edit Line Training Form</h1>
+  <h1>Edit Line Training Form</h1>
 
-    <form method="POST">
-        {{ form.hidden_tag() }}  <!-- This includes the CSRF token automatically -->
+  <!-- Bootstrap Tabs Navigation -->
+  <ul class="nav nav-tabs" id="editFormTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="general-tab" data-bs-toggle="tab" data-bs-target="#general" type="button" role="tab">General</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="email-thresholds-tab" data-bs-toggle="tab" data-bs-target="#email-thresholds" type="button" role="tab">Email Thresholds</button>
+    </li>
+  </ul>
+
+  <form method="POST">
+    {{ form.hidden_tag() }}
+
+    <div class="tab-content mt-3" id="editFormTabsContent">
+      <!-- General Tab Pane -->
+      <div class="tab-pane fade show active" id="general" role="tabpanel">
         <div class="form-group">
-            <label for="name">Training Form Name</label>
-            {{ form.name(class="form-control") }}
+          <label for="name">Training Form Name</label>
+          {{ form.name(class="form-control") }}
         </div>
         <div class="form-group">
-            <label for="roles">Assign Roles</label>
-            {{ form.roles(class="form-control", multiple=True) }}
+          <label for="roles">Assign Roles</label>
+          {{ form.roles(class="form-control", multiple=True) }}
         </div>
-        <button type="submit" class="btn btn-primary">Save</button>
-    </form>
+      </div>
+
+      <!-- Email Thresholds Tab Pane -->
+      <div class="tab-pane fade" id="email-thresholds" role="tabpanel">
+        <div class="form-group">
+          <label>Email Thresholds: Total Sectors</label>
+          <div id="sector-thresholds">
+            {% for entry in form.threshold_total_sectors %}
+              {{ entry(class="form-control my-1") }}
+            {% endfor %}
+          </div>
+          <button type="button" class="btn btn-sm btn-secondary mt-1" onclick="addSectorThreshold()">Add Sector Threshold</button>
+        </div>
+      
+        <div class="form-group">
+          <label>Email Thresholds: Total Hours</label>
+          <div id="hour-thresholds">
+            {% for entry in form.threshold_total_hours %}
+              {{ entry(class="form-control my-1") }}
+            {% endfor %}
+          </div>
+          <button type="button" class="btn btn-sm btn-secondary mt-1" onclick="addHourThreshold()">Add Hour Threshold</button>
+        </div>
+      </div>
+
+    <button type="submit" class="btn btn-primary mt-3">Save</button>
+  </form>
 </div>
+
+<script>
+    function addSectorThreshold() {
+      const container = document.getElementById("sector-thresholds");
+      const index = container.children.length;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.name = `threshold_total_sectors-${index}`;
+      input.className = "form-control my-1";
+      container.appendChild(input);
+    }
+    
+    function addHourThreshold() {
+      const container = document.getElementById("hour-thresholds");
+      const index = container.children.length;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.name = `threshold_total_hours-${index}`;
+      input.className = "form-control my-1";
+      container.appendChild(input);
+    }
+    </script>
 {% endblock %}

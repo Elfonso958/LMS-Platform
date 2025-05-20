@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+
 {% block content %}
 <!-- MANUAL ASSIGN FORM -->
 <form method="POST" class="row g-3 mt-4">
@@ -35,16 +36,16 @@
       {% for task in tasks %}
       <tr>
         <td>
-            {{ task.task_template.name }}
-            <a href="#" 
-               class="ms-2 text-info"
-               title="View Description"
-               data-bs-toggle="modal" 
-               data-bs-target="#descriptionModal"
-               data-description="{{ task.task_template.description|e }}">
-              🛈
-            </a>
-          </td>
+          {{ task.task_template.name }}
+          <a href="#" 
+             class="ms-2 text-info"
+             title="View Description"
+             data-bs-toggle="modal" 
+             data-bs-target="#descriptionModal"
+             data-description="{{ task.task_template.description|e }}">
+            🛈
+          </a>
+        </td>
         <td>{{ task.task_template.phase.capitalize() }}</td>
         <td>
           {% if task.status == 'Completed' %}
@@ -55,10 +56,14 @@
         </td>
         <td>{{ task.due_date|human_date if task.due_date else '—' }}</td>
         <td>
-          {% if task.task_template.responsible_job_title and task.task_template.responsible_job_title.manager %}
-            {{ task.task_template.responsible_job_title.manager.username or task.task_template.responsible_job_title.manager.email }}
+          {% if task.task_template.is_employee_task %}
+            <span class="badge bg-info text-white">Employee Task</span>
+          {% elif task.task_template.responsible_job_title and task.task_template.responsible_job_title.manager %}
+            <span class="badge bg-success text-white">
+              {{ task.task_template.responsible_job_title.manager.username }}
+            </span>
           {% else %}
-            —
+            <span class="badge bg-secondary">—</span>
           {% endif %}
         </td>
         <td>{{ task.completed_by or "—" }}</td>
@@ -66,17 +71,15 @@
         <td>
           {% if task.status != 'Completed' %}
           <button 
-          class="btn btn-sm btn-success"
-          data-bs-toggle="modal"
-          data-bs-target="#signOffModal"
-          data-userid="{{ task.user_id }}"
-          data-templateid="{{ task.task_template.id }}"
-          data-taskname="{{ task.task_template.name }}"
-          data-description="{{ task.task_template.description|e }}"
-        >
-          Sign Off
-        </button>
-        
+            class="btn btn-sm btn-success"
+            data-bs-toggle="modal"
+            data-bs-target="#signOffModal"
+            data-userid="{{ task.user_id }}"
+            data-templateid="{{ task.task_template.id }}"
+            data-taskname="{{ task.task_template.name }}"
+            data-description="{{ task.task_template.description|e }}">
+            Sign Off
+          </button>
           {% else %}
           {{ task.comment or "—" }}
           {% endif %}
@@ -100,14 +103,15 @@
       <div class="modal-body">
         <input type="hidden" name="user_id" id="modalUserId">
         <input type="hidden" name="task_template_id" id="modalTemplateId">
+        <input type="hidden" name="next" value="{{ request.path }}">
         <div class="mb-3">
           <label class="form-label">Task</label>
           <input type="text" class="form-control" id="modalTaskName" readonly>
         </div>
         <div class="mb-3">
-            <label class="form-label">Description</label>
-            <textarea class="form-control" id="modalTaskDescription" rows="3" readonly></textarea>
-          </div>
+          <label class="form-label">Description</label>
+          <textarea class="form-control" id="modalTaskDescription" rows="3" readonly></textarea>
+        </div>
         <div class="mb-3">
           <label class="form-label">Comment</label>
           <textarea name="comment" class="form-control" rows="3" required></textarea>
@@ -121,32 +125,34 @@
     </form>
   </div>
 </div>
+
 <!-- Description Modal -->
 <div class="modal fade" id="descriptionModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Task Description</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <p id="modalDescriptionText" class="mb-0 text-muted">No description provided.</p>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-        </div>
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Task Description</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="modalDescriptionText" class="mb-0 text-muted">No description provided.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
+</div>
+
 <script>
-const modal = document.getElementById('signOffModal');
-modal.addEventListener('show.bs.modal', function (event) {
-  const button = event.relatedTarget;
-  document.getElementById('modalUserId').value = button.getAttribute('data-userid');
-  document.getElementById('modalTemplateId').value = button.getAttribute('data-templateid');
-  document.getElementById('modalTaskName').value = button.getAttribute('data-taskname');
-  document.getElementById('modalTaskDescription').value = button.getAttribute('data-description') || "—";
-});
+  const signOffModal = document.getElementById('signOffModal');
+  signOffModal.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    document.getElementById('modalUserId').value = button.getAttribute('data-userid');
+    document.getElementById('modalTemplateId').value = button.getAttribute('data-templateid');
+    document.getElementById('modalTaskName').value = button.getAttribute('data-taskname');
+    document.getElementById('modalTaskDescription').value = button.getAttribute('data-description') || "—";
+  });
 
   const descriptionModal = document.getElementById('descriptionModal');
   descriptionModal.addEventListener('show.bs.modal', function (event) {

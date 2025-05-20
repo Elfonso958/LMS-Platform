@@ -1,0 +1,366 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+  <div class="row">
+    <!-- Sidebar Summary -->
+    <div class="col-lg-3 mb-4">
+      <div class="card shadow-sm">
+        <div class="card-body text-center">
+          <img src="{{ user.avatar_url or url_for('static', filename='images/default-avatar.png') }}" 
+               class="rounded-circle mb-3" 
+               alt="Avatar" 
+               width="120" height="120">
+          <h4 class="mb-1">{{ user.username }}</h4>
+          <p class="text-muted small mb-2">{{ user.email }}</p>
+          <ul class="list-inline mb-0">
+            {% for role_name in user_roles_names %}
+            <li class="list-inline-item">
+              <span class="badge bg-secondary">{{ role_name }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail Tabs -->
+    <div class="col-lg-9">
+      <ul class="nav nav-tabs mb-4" id="profileTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="contact-tab"
+                  data-bs-toggle="tab" data-bs-target="#contact"
+                  type="button" role="tab">✉️ Contact</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="auth-tab"
+                  data-bs-toggle="tab" data-bs-target="#authentication"
+                  type="button" role="tab">🔒 Auth</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="location-tab"
+                  data-bs-toggle="tab" data-bs-target="#locationEmergency"
+                  type="button" role="tab">🌎 Location</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="license-tab"
+                  data-bs-toggle="tab" data-bs-target="#license"
+                  type="button" role="tab">✈️ License</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="employment-tab"
+                  data-bs-toggle="tab" data-bs-target="#employment"
+                  type="button" role="tab">💼 Employment</button>
+        </li>
+      </ul>
+
+      <form method="POST" action="{{ url_for('hr.user_profile', user_id=user.id) }}">
+        <div class="tab-content">
+
+          <!-- Contact Tab -->
+          <div class="tab-pane fade show active" id="contact" role="tabpanel">
+            <div class="card mb-4 shadow-sm">
+              <div class="card-header bg-primary text-white">Contact Information</div>
+              <div class="card-body">
+                <div class="row g-3">
+                  <div class="col-md-6 form-floating">
+                    <input type="text" class="form-control" id="username" name="username"
+                           value="{{ user.username }}" required>
+                    <label for="username">Name</label>
+                  </div>
+                  <div class="col-md-6 form-floating">
+                    <input type="email" class="form-control" id="email" name="email"
+                           value="{{ user.email }}" required>
+                    <label for="email">Email</label>
+                  </div>
+                  <div class="col-md-6 form-floating">
+                    <input type="text" class="form-control" id="phone_number" name="phone_number"
+                           value="{{ user.phone_number }}">
+                    <label for="phone_number">Phone</label>
+                  </div>
+                  <div class="col-md-6 form-floating">
+                    <input type="text" class="form-control" id="address" name="address"
+                           value="{{ user.address }}">
+                    <label for="address">Address</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Authentication Tab -->
+          <div class="tab-pane fade" id="authentication" role="tabpanel">
+            <div class="card mb-4 shadow-sm">
+              <div class="card-header bg-secondary text-white">Authentication</div>
+              <div class="card-body">
+                <div class="mb-3 form-floating">
+                  {% if current_user.is_admin %}
+                  <select class="form-select" id="auth_type" name="auth_type" onchange="toggleAuthFields()">
+                    <option value="local" {% if user.auth_type=='local' %}selected{% endif %}>Local</option>
+                    <option value="envision" {% if user.auth_type=='envision' %}selected{% endif %}>Envision API</option>
+                  </select>
+                  <label for="auth_type">Auth Type</label>
+                  {% else %}
+                  <input type="hidden" name="auth_type" value="{{ user.auth_type }}">
+                  <p class="mb-0">Auth Type: <strong>{{ user.auth_type|capitalize }}</strong></p>
+                  {% endif %}
+                </div>
+                <div id="passwordField" class="mb-3 form-floating">
+                  <input type="password" class="form-control" id="password" name="password">
+                  <label for="password">Password</label>
+                </div>
+                <div id="envisionFields" class="row g-3" style="display:none;">
+                  <div class="col-md-6 form-floating">
+                    <input type="text" class="form-control" id="crew_code" name="crew_code"
+                           value="{{ user.crew_code }}" {% if not current_user.is_admin %}readonly{% endif %}>
+                    <label for="crew_code">Crew Code</label>
+                  </div>
+                  <div class="col-md-6 form-floating">
+                    <input type="text" class="form-control" id="employee_id" name="employee_id"
+                           value="{{ user.employee_id }}" readonly>
+                    <label for="employee_id">Employee ID</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Location & Emergency Tab -->
+          <div class="tab-pane fade" id="locationEmergency" role="tabpanel">
+            <div class="card mb-4 shadow-sm">
+              <div class="card-header bg-info text-white">Location</div>
+              <div class="card-body form-floating">
+                <select class="form-select" id="location" name="location_id"
+                        {% if not current_user.is_admin %}disabled{% endif %}>
+                  <option value="">-- Select Location --</option>
+                  {% for loc in locations %}
+                  <option value="{{ loc.id }}"
+                          {% if user.location and user.location.id==loc.id %}selected{% endif %}>
+                    {{ loc.name }}
+                  </option>
+                  {% endfor %}
+                </select>
+                <label for="location">Location</label>
+              </div>
+            </div>
+            <div class="card mb-4 shadow-sm">
+              <div class="card-header bg-warning text-dark">Emergency Contact</div>
+              <div class="card-body">
+                <div class="row g-3">
+                  <div class="col-md-6 form-floating">
+                    <input type="text" class="form-control" id="next_of_kin" name="next_of_kin"
+                           value="{{ user.next_of_kin }}">
+                    <label for="next_of_kin">Next of Kin</label>
+                  </div>
+                  <div class="col-md-6 form-floating">
+                    <input type="text" class="form-control" id="kin_phone_number" name="kin_phone_number"
+                           value="{{ user.kin_phone_number }}">
+                    <label for="kin_phone_number">Kin Phone</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- License Tab -->
+          <div class="tab-pane fade" id="license" role="tabpanel">
+            <div class="card mb-4 shadow-sm">
+              <div class="card-header bg-success text-white">License Information</div>
+              <div class="card-body">
+                <div class="row g-3">
+                  <div class="col-md-4 form-floating">
+                    <select class="form-select" id="license_type" name="license_type"
+                            {% if not current_user.is_admin %}disabled{% endif %}>
+                      <option value="CPL" {% if user.license_type=='CPL' %}selected{% endif %}>CPL</option>
+                      <option value="ATPL" {% if user.license_type=='ATPL' %}selected{% endif %}>ATPL</option>
+                    </select>
+                    <label for="license_type">Type</label>
+                  </div>
+                  <div class="col-md-4 form-floating">
+                    <input type="text" class="form-control" id="license_number" name="license_number"
+                           value="{{ user.license_number }}"
+                           {% if not current_user.is_admin %}readonly{% endif %}>
+                    <label for="license_number">Number</label>
+                  </div>
+                  <div class="col-md-4 form-floating">
+                    <input type="date" class="form-control" id="medical_expiry" name="medical_expiry"
+                           value="{{ user.medical_expiry.strftime('%Y-%m-%d') if user.medical_expiry else '' }}"
+                           {% if not current_user.is_admin %}readonly{% endif %}>
+                    <label for="medical_expiry">Medical Expiry</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+            <!-- Employment Tab -->
+            <div class="tab-pane fade" id="employment" role="tabpanel">
+                <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">💼 Employment & Onboarding</h5>
+                </div>
+                <div class="card-body">
+            
+                    <div class="row g-3">
+                    <div class="col-md-6 form-floating">
+                        <select class="form-select" id="type_of_employment" name="type_of_employment"
+                                {% if not current_user.is_admin %}disabled{% endif %}>
+                        <option value="Full Time" {% if payroll.type_of_employment=='Full Time' %}selected{% endif %}>Full Time</option>
+                        <option value="Part Time" {% if payroll.type_of_employment=='Part Time' %}selected{% endif %}>Part Time</option>
+                        <option value="Casual" {% if payroll.type_of_employment=='Casual' %}selected{% endif %}>Casual</option>
+                        <option value="Fixed Term" {% if payroll.type_of_employment=='Fixed Term' %}selected{% endif %}>Fixed Term</option>
+                        </select>
+                        <label for="type_of_employment">Employment Type</label>
+                    </div>
+                    <div class="col-md-6 form-floating">
+                        <input type="text" class="form-control" id="bank_account_details" name="bank_account_details"
+                            value="{{ payroll.bank_account_details or '' }}"
+                            {% if not current_user.is_admin %}readonly{% endif %}>
+                        <label for="bank_account_details">Bank Account</label>
+                    </div>
+                    </div>
+            
+                    {% if current_user.is_admin %}
+                    <hr class="my-4">
+                    <div class="mb-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="is_admin" name="is_admin"
+                            {% if user.is_admin %}checked{% endif %}>
+                        <label class="form-check-label" for="is_admin">Grant admin privileges</label>
+                    </div>
+                    <label for="roles" class="form-label">🏷️ Roles</label>
+                    <select class="form-select" id="roles" name="roles" multiple>
+                        {% for role in roles %}
+                        <option value="{{ role.roleID }}" {% if role.roleID in user_roles %}selected{% endif %}>
+                        {{ role.role_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Hold Ctrl (Windows) or ⌘ (Mac) to select multiple.</div>
+                    </div>
+                    {% endif %}
+            
+                    <hr class="my-4">
+                    <div class="row g-3">
+                    <div class="col-md-6 form-floating">
+                        <input type="date" class="form-control" id="onboarding_start_date" name="onboarding_start_date"
+                            value="{{ user.onboarding_start_date.strftime('%Y-%m-%d') if user.onboarding_start_date else '' }}">
+                        <label for="onboarding_start_date">Onboarding Start Date</label>
+                    </div>
+                    <div class="col-md-6 form-floating">
+                        <input type="date" class="form-control" id="offboarding_end_date" name="offboarding_end_date"
+                            value="{{ user.offboarding_end_date.strftime('%Y-%m-%d') if user.offboarding_end_date else '' }}">
+                        <label for="offboarding_end_date">Offboarding End Date</label>
+                    </div>
+                    </div>
+            
+                    <hr class="my-4">
+            
+                    <div class="mb-3">
+                    <label for="job_title" class="form-label">Job Title:</label>
+                    <select id="job_title" name="job_title_id" class="form-select"
+                            {% if not current_user.is_admin %}disabled{% endif %}
+                            onchange="updateReportsTo()">
+                        <option value="" {% if not user.job_title %}selected{% endif %}>-- Select Job Title --</option>
+                        {% for job in job_titles %}
+                        <option value="{{ job.id }}"
+                                data-reports-to="{% if job.parent_job %}{{ job.parent_job.title }}{% else %}Not Assigned{% endif %}"
+                                data-manager="{% if job.parent_job and job.parent_job.manager %}{{ job.parent_job.manager.username }}{% else %}No Manager Assigned{% endif %}"
+                                {% if user.job_title and user.job_title.id == job.id %}selected{% endif %}>
+                        {{ job.title }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    </div>
+            
+                    <div class="mb-3">
+                    <label for="reports_to" class="form-label">Reports To:</label>
+                    <input type="text" id="reports_to" name="reports_to" class="form-control text-truncate"
+                            value="{{ (user.job_title.parent_job.title | trim) ~ ' - ' ~ (user.job_title.parent_job.manager.username | trim) if user.job_title and user.job_title.parent_job and user.job_title.parent_job.manager else 'Not Assigned' }}"
+                            readonly>
+                    </div>
+            
+                </div>
+                </div>
+            </div>
+  
+          <!-- End Employment Tab -->
+
+        </div>
+
+        <div class="text-end mb-5">
+          <button type="submit" class="btn btn-primary btn-lg">💾 Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<div class="toast-container position-fixed top-0 end-0 p-3">
+  <div id="emailToast" class="toast align-items-center text-white bg-success border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body">
+        ✅ Email(s) sent successfully!
+      </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Toggle fields based on auth type
+  function toggleAuthFields() {
+    const authType = document.getElementById('auth_type').value;
+    document.getElementById('passwordField').style.display = authType === 'local' ? 'block' : 'none';
+    document.getElementById('envisionFields').style.display = authType === 'envision' ? 'flex' : 'none';
+  }
+
+  // Update "Reports To" based on selected job
+  function updateReportsTo() {
+    const select = document.getElementById('job_title');
+    const option = select.options[select.selectedIndex];
+    const reportsTo = option.getAttribute('data-reports-to');
+    const manager = option.getAttribute('data-manager');
+    document.getElementById('reports_to').value =
+      reportsTo + (manager ? ' - ' + manager : '');
+  }
+
+  document.addEventListener('DOMContentLoaded', toggleAuthFields);
+
+  function showEmailOverlay() {
+  document.getElementById('emailOverlay').style.display = 'block';
+}
+
+function hideEmailOverlay() {
+  document.getElementById('emailOverlay').style.display = 'none';
+}
+
+function showSuccessToast() {
+  const toastEl = document.getElementById('emailToast');
+  const toast = new bootstrap.Toast(toastEl);
+  toast.show();
+}
+
+// Hook into your form submit (or button click)
+document.querySelectorAll('form').forEach(form => {
+  form.addEventListener('submit', () => {
+    showEmailOverlay();
+  });
+});
+</script>
+<!-- Loading Overlay Spinner -->
+<div id="emailOverlay" style="
+  display: none;
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(255, 255, 255, 0.8);
+  z-index: 2000;
+  text-align: center;
+  padding-top: 20%;">
+  <div class="spinner-border text-primary" style="width: 4rem; height: 4rem;" role="status">
+    <span class="visually-hidden">Sending...</span>
+  </div>
+  <p class="mt-3 fw-bold">Assigning Tasks and Sending emails...</p>
+</div>
+
+{% endblock %}

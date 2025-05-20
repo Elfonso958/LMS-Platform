@@ -1,120 +1,216 @@
 {% extends "base.html" %}
+
 {% block title %}Review Document Uploads{% endblock %}
 
 {% block content %}
+<style>
+  /* Make modal-wide and ensure image never overflows */
+  .modal-dialog.modal-xl {
+    max-width: 90vw;
+  }
+  #previewModal .modal-body {
+    padding: 0;
+  }
+  #previewImage {
+    cursor: zoom-in;
+    transition: transform .3s ease;
+    max-height: 80vh;
+    object-fit: contain;
+    width: 100%;
+  }
+  #previewImage.zoomed {
+    transform: scale(2);
+    cursor: zoom-out;
+  }
+</style>
+
 <div class="container mt-5">
-    <h2>Pending Document Review Requests</h2>
+  <h2>Pending Document Review Requests</h2>
 
-    <!-- Filter -->
-    <form method="GET" class="row g-3 mb-4">
-        <div class="col-md-4">
-            <label for="filter" class="form-label">Filter by Document Type</label>
-            <select name="filter" id="filter" class="form-select" onchange="this.form.submit()">
-                <option value="">All</option>
-                {% for dtype in document_types %}
-                <option value="{{ dtype.id }}" {% if filter == dtype.id|string %}selected{% endif %}>{{ dtype.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-    </form>
+  <!-- Filter -->
+  <form method="GET" class="row g-3 mb-4">
+    <div class="col-md-4">
+      <label for="filter" class="form-label">Filter by Document Type</label>
+      <select name="filter" id="filter" class="form-select" onchange="this.form.submit()">
+        <option value="">All</option>
+        {% for dtype in document_types %}
+          <option value="{{ dtype.id }}" {% if filter == dtype.id|string %}selected{% endif %}>
+            {{ dtype.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
 
-    {% if pending_docs.items %}
-    <table class="table table-bordered table-hover">
-        <thead>
-            <tr>
-                <th>User</th>
-                <th>Document Type</th>
-                <th>Document Date</th>
-                <th>Submitted At</th>
-                <th>File</th>
-                <th style="width: 220px;">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for doc in pending_docs.items %}
-            <tr>
-                <td>{{ doc.user.username }}</td>
-                <td>{{ doc.type.name }}</td>
-                <td>{{ doc.document_expiry_date.strftime('%Y-%m-%d') }}</td>
-                <td>{{ doc.submitted_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                <td>
-                    <!-- Trigger Thumbnail -->
-                    <img src="{{ url_for('static', filename=doc.file_path) }}" style="max-width: 100px; max-height: 100px; cursor: pointer;" 
-                        data-bs-toggle="modal" data-bs-target="#previewModal{{ doc.id }}" />
-                  </td>             
-                <td>
-                    <form method="POST" action="{{ url_for('document.review_documents') }}">
-                        <input type="hidden" name="doc_id" value="{{ doc.id }}">
-                        <div class="input-group mb-2">
-                            <select name="action" class="form-select" required>
-                                <option value="">Select</option>
-                                <option value="approve">Approve</option>
-                                <option value="reject">Reject</option>
-                            </select>
-                        </div>
-                        <input type="text" name="comment" class="form-control mb-2" placeholder="Optional comment...">
-                        <button class="btn btn-sm btn-primary" type="submit">Submit</button>
-                    </form>
-                    
-                </td>
-            </tr>
-            <!-- Modal for Document Preview -->
-            <div class="modal fade custom-preview-modal" id="previewModal{{ doc.id }}" tabindex="-1" aria-labelledby="previewLabel{{ doc.id }}" aria-hidden="true">
-                <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                    <h5 class="modal-title" id="previewLabel{{ doc.id }}">{{ doc.type.name }} - {{ doc.user.username }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body text-center">
-                    <img src="{{ url_for('static', filename=doc.file_path) }}" class="img-fluid rounded shadow" alt="Preview">
-                    </div>
-                </div>
-                </div>
-            </div>
+  {% if pending_groups %}
+  <form method="POST">
+    <table class="table table-bordered table-hover align-middle">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Document Type</th>
+          <th>Document Date</th>
+          <th>Submitted At</th>
+          <th>Files</th>
+          <th style="width: 220px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for group in pending_groups %}
+        <tr>
+          <td>{{ group.user.username }}</td>
+          <td>{{ group.document_type.name }}</td>
+          <td>{{ group.expiry_date.strftime('%Y-%m-%d') }}</td>
+          <td>{{ group.submitted_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td>
+            {% for d in group.files %}
+            <a href="#"
+               class="preview-thumb"
+               data-src="{{ url_for('static', filename=d.file_path) }}"
+               title="Page {{ loop.index }} of {{ group.files|length }}">
+              <img src="{{ url_for('static', filename=d.file_path) }}"
+                   class="img-thumbnail me-1"
+                   style="max-width:75px; max-height:75px;"
+                   alt="Page {{ loop.index }}">
+            </a>
             {% endfor %}
-        </tbody>
+          </td>
+          <td>
+            <input type="hidden" name="doc_ids" value="{{ group.doc_ids }}">
+            <div class="mb-2">
+              <select name="action" class="form-select form-select-sm" required>
+                <option value="">Select…</option>
+                <option value="approved">Approve</option>
+                <option value="reject">Reject</option>
+              </select>
+            </div>
+            <div class="mb-2">
+              <input type="text"
+                     name="comment"
+                     class="form-control form-control-sm"
+                     placeholder="Optional comment…">
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
     </table>
 
-    <!-- Pagination -->
-    <nav>
-        <ul class="pagination">
-            {% if pending_docs.has_prev %}
-                <li class="page-item">
-                    <a class="page-link" href="{{ url_for('document.review_documents', page=pending_docs.prev_num, filter=filter) }}">&laquo; Prev</a>
-                </li>
-            {% endif %}
-            {% for page_num in pending_docs.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-                {% if page_num %}
-                    <li class="page-item {% if pending_docs.page == page_num %}active{% endif %}">
-                        <a class="page-link" href="{{ url_for('document.review_documents', page=page_num, filter=filter) }}">{{ page_num }}</a>
-                    </li>
-                {% else %}
-                    <li class="page-item disabled"><span class="page-link">...</span></li>
-                {% endif %}
-            {% endfor %}
-            {% if pending_docs.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="{{ url_for('document.review_documents', page=pending_docs.next_num, filter=filter) }}">Next &raquo;</a>
-                </li>
-            {% endif %}
-        </ul>
-    </nav>
-    {% else %}
-        <p>No pending document requests found.</p>
-    {% endif %}
+    <button type="submit" class="btn btn-primary">Submit Reviews</button>
+  </form>
 
+  <!-- Pagination -->
+  <nav class="mt-4">
+    <ul class="pagination">
+      {% if pending_docs.has_prev %}
+      <li class="page-item">
+        <a class="page-link"
+           href="{{ url_for('document.review_documents', page=pending_docs.prev_num, filter=filter) }}">
+          &laquo; Prev
+        </a>
+      </li>
+      {% endif %}
+      {% for p in pending_docs.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+        {% if p %}
+        <li class="page-item {% if p == pending_docs.page %}active{% endif %}">
+          <a class="page-link"
+             href="{{ url_for('document.review_documents', page=p, filter=filter) }}">
+            {{ p }}
+          </a>
+        </li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">…</span></li>
+        {% endif %}
+      {% endfor %}
+      {% if pending_docs.has_next %}
+      <li class="page-item">
+        <a class="page-link"
+           href="{{ url_for('document.review_documents', page=pending_docs.next_num, filter=filter) }}">
+          Next &raquo;
+        </a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+
+  {% else %}
+  <p>No pending document requests found.</p>
+  {% endif %}
 </div>
-<script>
-    lightbox.option({
-      'resizeDuration': 200,
-      'wrapAround': true,
-      'fitImagesInViewport': true,
-      'maxWidth': 1000,
-      'maxHeight': 800,
-      'disableScrolling': true
+
+<!-- Single Preview Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content">
+      <div class="modal-body text-center">
+        <img id="previewImage" src="" class="img-fluid rounded" alt="Preview">
+      </div>
+      <div class="modal-footer">
+        <a id="downloadBtn"
+           class="btn btn-primary"
+           href=""
+           download>
+          Save
+        </a>
+        <button type="button"
+                class="btn btn-secondary"
+                data-bs-dismiss="modal">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    console.log('🔧 review_documents script initializing...');
+
+    window.addEventListener('load', () => {
+      if (!window.bootstrap || typeof bootstrap.Modal !== 'function') {
+        console.error('❌ Bootstrap Modal is not available');
+        return;
+      }
+      console.log('✅ Bootstrap Modal found');
+
+      const modalEl     = document.getElementById('previewModal');
+      const previewImg  = document.getElementById('previewImage');
+      const downloadBtn = document.getElementById('downloadBtn');
+
+      if (!modalEl || !previewImg || !downloadBtn) {
+        console.error('❌ Missing modal elements');
+        return;
+      }
+      console.log('✅ Found modalEl, previewImage, and downloadBtn');
+
+      let bsModal;
+      try {
+        bsModal = new bootstrap.Modal(modalEl);
+        console.log('✅ bootstrap.Modal instance created');
+      } catch (err) {
+        console.error('❌ Error creating bootstrap.Modal:', err);
+        return;
+      }
+
+      // Thumbnail → modal
+      document.querySelectorAll('.preview-thumb').forEach((anchor, idx) => {
+        anchor.addEventListener('click', e => {
+          e.preventDefault();
+          const src = anchor.dataset.src;
+          previewImg.src = src;
+          downloadBtn.href = src;
+          downloadBtn.download = src.split('/').pop();
+          previewImg.classList.remove('zoomed');  // reset zoom
+          bsModal.show();
+        });
+      });
+
+      // Click on image toggles zoom
+      previewImg.addEventListener('click', () => {
+        previewImg.classList.toggle('zoomed');
+      });
     });
-</script>
-    
-    
+  </script>
 {% endblock %}

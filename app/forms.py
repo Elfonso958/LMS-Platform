@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SelectMultipleField, SubmitField, TextAreaField, DateField, FloatField, SelectField, FileField
-from wtforms.validators import DataRequired, Email
+from wtforms import StringField, PasswordField,FieldList, SelectMultipleField, SubmitField, TextAreaField, DateField, FloatField, SelectField, FileField, IntegerField
+from wtforms.validators import DataRequired, Email, Optional, NumberRange
 from flask_wtf.file import FileAllowed
 
 class LoginForm(FlaskForm):
@@ -12,6 +12,9 @@ class LineTrainingFormEditForm(FlaskForm):
     roles = SelectMultipleField('Roles Assigned', coerce=int, choices=[])  # Multiple roles
     submit = SubmitField('Save Changes')
 
+    # NEW Fields
+    threshold_total_sectors = FieldList(StringField(''), min_entries=1, validators=[Optional()])
+    threshold_total_hours = FieldList(StringField(''), min_entries=1, validators=[Optional()])    
     def __init__(self, *args, **kwargs):
         super(LineTrainingFormEditForm, self).__init__(*args, **kwargs)
 
@@ -58,27 +61,26 @@ class MedicalExpiryEmailConfigForm(FlaskForm):
 class FormUpload(FlaskForm):
     document_type = SelectField(
         'Document Type',
-        choices=[
-            ('medical', 'Medical Certificate'),
-            ('passport', 'Passport'),
-            ('license', 'License'),
-            ('other', 'Other')
-        ],
+        choices=[],     # will be filled in your view
+        coerce=int,     # gives you an int, so it matches dt.id
         validators=[DataRequired()]
     )
-    document_expiry_date = DateField('Document Expiry or Issue Date', validators=[DataRequired()])
-    file = FileField(
-        'Upload Document',
-        validators=[
-            DataRequired(),
-            FileAllowed(['pdf', 'jpg', 'jpeg', 'png'], 'Only PDF or image files are allowed')
-        ]
+    document_expiry_date = DateField(
+        'Document Expiry or Issue Date',
+        format='%Y-%m-%d',
+        validators=[DataRequired()]
     )
     submit = SubmitField('Submit for Review')
 
 class DocumentTypeForm(FlaskForm):
-    name = StringField("Document Type Name", validators=[DataRequired()])
-    submit = SubmitField("Add Document Type")
+    name           = StringField('Name', validators=[DataRequired()])
+    description    = StringField('Description')
+    pages_required = IntegerField(
+        'Pages Required',
+        validators=[DataRequired(), NumberRange(min=1)],
+        default=1
+    )
+    submit         = SubmitField('Save')
 
 class DirectDocumentUploadForm(FlaskForm):
     user_id = SelectField("User", coerce=int, validators=[DataRequired()])

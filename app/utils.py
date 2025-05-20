@@ -20,7 +20,6 @@ from win32com.client import Dispatch as CreateObject
 from flask import render_template, redirect, url_for, flash, request, current_app, send_from_directory, g, jsonify, session,Response
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager, login_user, logout_user, login_required,current_user,UserMixin
-from app import create_app, db, mail
 from app.models import Course, RoleType, UserSlideProgress, UserExamAttempt, Questions, Answers, UserAnswer, course_role, User, db, PayrollInformation, CrewCheck, CrewCheckMeta, CheckItem, user_role,CheckItemGrade, LineTrainingForm, Location, Port, HandlerFlightMap, GroundHandler, CrewAcknowledgement
 from app.models import Task,TaskCompletion,Topic, LineTrainingItem,UserLineTrainingForm, Sector, RosterChange, Flight, FormTemplate,RoutePermission,Qualification,EmployeeSkill, EmailConfig, JobTitle, Timesheet, Location, PayrollPeriod,PayrollInformation, NavItem, NavItemPermission # Import your models and database session
 from werkzeug.security import generate_password_hash
@@ -55,7 +54,7 @@ def admin_required(func):
     def decorated_view(*args, **kwargs):
         if not current_user.is_authenticated or not current_user.is_admin:
             flash("You do not have permission to access this page.", "danger")
-            return redirect(url_for('landing'))
+            return redirect(url_for('user.user_dashboard'))
         return func(*args, **kwargs)
     return decorated_view
 
@@ -379,3 +378,25 @@ def save_uploaded_document(file_storage, username, doc_type_name, expiry_date):
 
     relative_path = os.path.relpath(full_path, current_app.static_folder).replace("\\", "/")
     return relative_path
+
+def format_ddmmyyyy(value):
+    if isinstance(value, datetime):
+        return value.strftime('%d%m%Y')
+    elif isinstance(value, str):
+        try:
+            parsed = datetime.strptime(value, "%Y-%m-%d")
+            return parsed.strftime('%d%m%Y')
+        except ValueError:
+            return value
+    return value
+
+def format_human_date(value):
+    if isinstance(value, datetime):
+        return value.strftime('%A %d %B')
+    elif isinstance(value, str):
+        try:
+            parsed = datetime.strptime(value, "%Y-%m-%d")
+            return parsed.strftime('%A %d %B')
+        except ValueError:
+            return value
+    return value

@@ -52,9 +52,15 @@
                   <ul class="list-unstyled ms-4 mt-2">
                     {% for doc in docs %}
                       <li class="mb-2">
-                        📄 <a href="{{ url_for('static', filename=doc.file_path) }}" target="_blank">
-                          {{ doc.type.name }} - {{ doc.document_expiry_date.strftime('%Y-%m-%d') }}
-                        </a>
+                        📄 <button 
+                        type="button"
+                        class="btn btn-link p-0"
+                        data-bs-toggle="modal"
+                        data-bs-target="#docModal"
+                        data-doc="{{ url_for('static', filename=doc.file_path) }}">
+                        {{ doc.type.name }} - {{ doc.document_expiry_date.strftime('%Y-%m-%d') }}
+                      </button>
+
                       </li>
                     {% endfor %}
                   </ul>
@@ -66,7 +72,40 @@
           {% endif %}
         </div>
       {% endif %}
+      <!-- Modal -->
+<div class="modal fade" id="docModal" tabindex="-1" aria-labelledby="docModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="docModalLabel">Document Preview</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center">
+        <img id="docImage" src="" class="img-fluid w-100" style="max-height: 80vh; object-fit: contain;" />
+      </div>
     </div>
   </div>
 </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const docModal = document.getElementById('docModal');
+    const img = document.getElementById('docImage');
+  
+    docModal.addEventListener('show.bs.modal', function (event) {
+      const button = event.relatedTarget;
+      const docUrl = button.getAttribute('data-doc');
+      img.src = docUrl;
+    });
+  
+    docModal.addEventListener('hidden.bs.modal', function () {
+      img.src = ""; // Clear image when modal closes
+    });
+  });
+  </script>
+  
+  
 {% endblock %}

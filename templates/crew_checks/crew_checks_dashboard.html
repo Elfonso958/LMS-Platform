@@ -1,215 +1,591 @@
 {% extends "base.html" %}
+{% set delete_base   = url_for('crew_checks.delete_crew_check',   crew_check_id=0)[:-1] %}
+{% set archive_base  = url_for('crew_checks.archive_crew_check',  crew_check_id=0)[:-1] %}
+{% set restore_base  = url_for('crew_checks.restore_crew_check',  crew_check_id=0)[:-1] %}
 
 {% block title %}Crew Checks Dashboard{% endblock %}
 
 {% block content %}
 <div class="container mt-5">
-    <h1 class="mb-4 text-center">🛠️ Crew Checks Dashboard</h1>
+  <h1 class="mb-4 text-center">🛠️ Crew Checks Dashboard</h1>
 
-    <!-- Create New Forms (Only for Training Team) -->
+  {# Create New Forms (Training Team only) #}
+  {% if 'Training Team' in current_user.roles|map(attribute='role_name') %}
     <div class="text-center mb-4">
-        {% if "Training Team" in current_user.roles|map(attribute="role_name") %}
-            <a href="{{ url_for('crew_checks.create_crew_check') }}" class="btn btn-success mx-2">➕ Create New Crew Check</a>
-            <a href="{{ url_for('Line_Training.create_line_training_form') }}" class="btn btn-success mx-2">➕ Create New Training Form</a>
-        {% endif %}
+        <button class="btn btn-success mx-2"
+          id="create-headers-tab"
+          data-bs-toggle="modal"
+          data-bs-target="#createCrewCheckModal">
+          ➕ Create New Crew Check
+        </button>
+      <a href="{{ url_for('Line_Training.create_line_training_form') }}" class="btn btn-success mx-2">➕ Create New Training Form</a>
     </div>
+  {% endif %}
 
-    <!-- Crew Checks Section -->
-    <h2 class="mt-4 text-primary">📋 Graded Crew Checks</h2>
-    <div class="row">
-        {% for check in crew_checks %}
-        <div class="col-md-6 col-lg-4">
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">{{ check.name }}</h5>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted">🕒 Created: {{ check.created_at.strftime('%Y-%m-%d %H:%M:%S') if check.created_at else 'N/A' }}</p>
-                    <p>🏷 Roles Assigned: 
-                        {% for role in check.roles %}
-                            <span class="badge bg-info">{{ role.role_name }}</span>
-                        {% endfor %}
-                    </p>
-                    <div class="d-flex flex-wrap gap-2">
-                        <a href="{{ url_for('crew_checks.crew_check_form', crew_check_id=check.id) }}" class="btn btn-primary btn-sm w-100">👀 View</a>
-                        
-                        {% if "Training Team" in current_user.roles|map(attribute="role_name") %}
-                            <a href="{{ url_for('crew_checks.add_check_item', check_id=check.id) }}" class="btn btn-secondary btn-sm w-100">➕ Add Item</a>
-                            <button class="btn btn-warning btn-sm w-100"
-                            onclick='openEditModal(
-                              {{ check.id }},
-                              "{{ check.name }}",
-                              {{ check.roles | map(attribute="roleID") | list }},
-                              {{ check.visible_headers if check.visible_headers else "[]" | safe }}
-                            )'>
-                            ✏️ Edit
-                            </button>                            
-                            <form action="{{ url_for('crew_checks.delete_crew_check', crew_check_id=check.id) }}" method="POST" class="w-100">
-                                <button type="submit" class="btn btn-danger btn-sm w-100" onclick="return confirm('Are you sure?')">
-                                    ❌ Delete
-                                </button>
-                            </form>
-                        {% endif %}
-                    </div>
-                    
-                </div>
+  {# Active Crew Checks #}
+  <h2 class="mt-4 text-primary">📋 Graded Crew Checks</h2>
+  <div class="row">
+    {% for check in crew_checks %}
+      <div class="col-md-6 col-lg-4">
+        <div class="card shadow-sm mb-4">
+          <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">{{ check.name }}</h5>
+          </div>
+          <div class="card-body">
+            <p class="text-muted">🕒 Created: {{ check.created_at.strftime('%Y-%m-%d %H:%M:%S') if check.created_at else 'N/A' }}</p>
+            <p>🏷 Roles Assigned:
+              {% for role in check.roles %}
+                <span class="badge bg-info">{{ role.role_name }}</span>
+              {% endfor %}
+            </p>
+            <div class="d-flex flex-wrap gap-2">
+              <a href="{{ url_for('crew_checks.crew_check_form', crew_check_id=check.id) }}" class="btn btn-primary btn-sm w-100">👀 View</a>
+
+              {% if 'Training Team' in current_user.roles|map(attribute='role_name') %}
+                <a href="{{ url_for('crew_checks.add_check_item', check_id=check.id) }}" class="btn btn-secondary btn-sm w-100">➕ Add Item</a>
+
+                <button class="btn btn-warning btn-sm w-100"
+                        onclick='openEditModal(
+                          {{ check.id }},
+                          {{ check.name|tojson }},
+                          {{ check.roles|map(attribute="roleID")|list|tojson }},
+                          {{ check._visible_headers_cache|tojson }}
+                        )'>
+                  ✏️ Edit
+                </button>
+
+                {% if check.has_completed %}
+                  <button type="button" class="btn btn-warning btn-sm w-100"
+                          data-bs-toggle="modal" data-bs-target="#archiveModal"
+                          onclick="
+                            document.getElementById('archiveForm').action='{{ archive_base }}{{ check.id }}';
+                            document.getElementById('archiveName').textContent='{{ check.name }}';
+                          ">
+                    🗄️ Archive
+                  </button>
+                {% else %}
+                  <form method="post" action="{{ delete_base }}{{ check.id }}" class="w-100">
+                    <button type="submit" class="btn btn-danger btn-sm w-100"
+                            onclick="return confirm('Are you sure you want to delete this check?')">
+                      ❌ Delete
+                    </button>
+                  </form>
+                {% endif %}
+              {% endif %}
             </div>
+          </div>
         </div>
-        {% endfor %}
-    </div>
+      </div>
+    {% endfor %}
+  </div>
+  {% if not crew_checks %}
+    <p class="text-muted text-center">No crew checks found.</p>
+  {% endif %}
 
-    <!-- No Crew Checks Message -->
-    {% if not crew_checks %}
-        <p class="text-muted text-center">No crew checks found.</p>
-    {% endif %}
-
-    <!-- Line Training Forms Section -->
-    <h2 class="mt-4 text-success">🎓 Line Training Forms</h2>
+  {# Archived Crew Checks (Training Team only) #}
+  {% if 'Training Team' in current_user.roles|map(attribute='role_name') %}
+    <h2 class="mt-5 text-secondary">🗄️ Archived Crew Checks</h2>
     <div class="row">
-        {% for form in line_training_forms %}
+      {% for check in archived_checks %}
         <div class="col-md-6 col-lg-4">
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">{{ form.name }}</h5>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted">🕒 Created: {{ form.created_at.strftime('%Y-%m-%d %H:%M:%S') if form.created_at else 'N/A' }}</p>
-                    <p>🏷 Roles Assigned:
-                        {% for role in form.roles %}
-                            <span class="badge bg-info">{{ role.role_name }}</span>
-                        {% endfor %}
-                    </p>
-                    <div class="d-flex flex-wrap gap-2">
-                        
-                        
-                        {% if "Training Team" in current_user.roles|map(attribute="role_name") %}
-                            <a href="{{ url_for('Line_Training.edit_line_training_form', form_id=form.id) }}" class="btn btn-warning btn-sm w-100">✏️ Edit</a>
-                            <a href="{{ url_for('Line_Training.create_active_line_training_form', template_id=form.id) }}" class="btn btn-success btn-sm w-100">📝 Create New Line Training Form</a>
-                            <a href="{{ url_for('Line_Training.add_items_to_line_training_form', form_id=form.id) }}" class="btn btn-primary btn-sm w-100">👀 View/Edit</a>
-                            <form action="{{ url_for('Line_Training.delete_line_training_form', form_id=form.id) }}" method="POST" class="w-100">
-                              <button type="submit" class="btn btn-danger btn-sm w-100" onclick="return confirm('Are you sure?')">
-                                ❌ Delete
-                              </button>
-                              <p>DEBUG: {{ url_for('Line_Training.delete_line_training_form', form_id=form.id) }}</p>
-                            </form>
-                            
-                        {% else %}
-                            <p class="text-warning text-center w-100"><strong>Only Training Team can create/edit forms.</strong></p>
-                        {% endif %}
-                    </div>                   
-                </div>
+          <div class="card border-secondary mb-4">
+            <div class="card-header bg-light text-secondary">
+              <h5 class="mb-0">{{ check.name }}</h5>
             </div>
+            <div class="card-body">
+              <p class="text-muted">🕒 Created: {{ check.created_at.strftime('%Y-%m-%d %H:%M:%S') if check.created_at else 'N/A' }}</p>
+              <p>🏷 Roles Assigned:
+                {% for role in check.roles %}
+                  <span class="badge bg-info">{{ role.role_name }}</span>
+                {% endfor %}
+              </p>
+              <form method="post" action="{{ restore_base }}{{ check.id }}" class="w-100">
+                <button type="submit" class="btn btn-success btn-sm w-100" onclick="return confirm('Restore this archived check?')">
+                  🔄 Restore
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
-        {% endfor %}
+      {% endfor %}
     </div>
-
-    <!-- No Line Training Forms Message -->
-    {% if not line_training_forms %}
-        <p class="text-muted text-center">No line training forms available.</p>
+    {% if not archived_checks %}
+      <p class="text-muted text-center">No archived crew checks.</p>
     {% endif %}
+  {% endif %}
+
+  {# Line Training Forms #}
+  <h2 class="mt-5 text-success">🎓 Line Training Forms</h2>
+  <div class="row">
+    {% for form in line_training_forms %}
+      <div class="col-md-6 col-lg-4">
+        <div class="card shadow-sm mb-4">
+          <div class="card-header bg-success text-white">
+            <h5 class="mb-0">{{ form.name }}</h5>
+          </div>
+          <div class="card-body">
+            <p class="text-muted">🕒 Created: {{ form.created_at.strftime('%Y-%m-%d %H:%M:%S') if form.created_at else 'N/A' }}</p>
+            <p>🏷 Roles Assigned:
+              {% for role in form.roles %}
+                <span class="badge bg-info">{{ role.role_name }}</span>
+              {% endfor %}
+            </p>
+            <div class="d-flex flex-wrap gap-2">
+              {% if 'Training Team' in current_user.roles|map(attribute='role_name') %}
+                <a href="{{ url_for('Line_Training.edit_line_training_form', form_id=form.id) }}" class="btn btn-warning btn-sm w-100">✏️ Edit</a>
+                <a href="{{ url_for('Line_Training.create_active_line_training_form', template_id=form.id) }}" class="btn btn-success btn-sm w-100">📝 New Form</a>
+                <a href="{{ url_for('Line_Training.add_items_to_line_training_form', form_id=form.id) }}" class="btn btn-primary btn-sm w-100">👀 View/Edit</a>
+                <form action="{{ url_for('Line_Training.delete_line_training_form', form_id=form.id) }}" method="POST" class="w-100">
+                  <button type="submit" class="btn btn-danger btn-sm w-100" onclick="return confirm('Are you sure?')">❌ Delete</button>
+                </form>
+              {% else %}
+                <p class="text-warning text-center w-100"><strong>Only Training Team can edit.</strong></p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  {% if not line_training_forms %}
+    <p class="text-muted text-center">No line training forms available.</p>
+  {% endif %}
 </div>
 
-<!-- 🔧 Edit Crew Check Modal -->
+{# Edit Crew Check Modal #}
 <div class="modal fade" id="editCrewCheckModal" tabindex="-1" aria-labelledby="editCrewCheckLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg"> <!-- Make it wider -->
-      <form method="POST" id="editCrewCheckForm" action="{{ url_for('crew_checks.edit_crew_check', crew_check_id=0) }}">
-        <div class="modal-content">
-          <div class="modal-header bg-warning text-dark">
-            <h5 class="modal-title" id="editCrewCheckLabel">✏️ Edit Crew Check</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-  
-          <div class="modal-body">
-            <input type="hidden" name="crew_check_id" id="crewCheckIdInput">
-  
-            <!-- Nav tabs -->
-            <ul class="nav nav-tabs mb-3" id="editCheckTabs" role="tablist">
-              <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="details-tab" data-bs-toggle="tab" data-bs-target="#detailsTab" type="button" role="tab">📝 Details</button>
-              </li>
-              <li class="nav-item" role="presentation">
-                <button class="nav-link" id="headers-tab" data-bs-toggle="tab" data-bs-target="#headersTab" type="button" role="tab">📋 Fields to Show</button>
-              </li>
-            </ul>
-  
-            <!-- Tab panes -->
-            <div class="tab-content">
-              <!-- Details Tab -->
-              <div class="tab-pane fade show active" id="detailsTab" role="tabpanel">
-                <div class="mb-3">
-                  <label for="checkNameInput" class="form-label">Name</label>
-                  <input type="text" class="form-control" name="name" id="checkNameInput" required>
-                </div>
-  
-                <div class="mb-3">
-                  <label class="form-label">Roles</label>
-                  <div class="row">
-                    {% for role in roles %}
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form id="editCrewCheckForm" method="post">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editCrewCheckLabel">✏️ Edit Crew Check</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+
+          {# Nav tabs #}
+          <ul class="nav nav-tabs" id="editCrewCheckTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="general-tab"
+                      data-bs-toggle="tab" data-bs-target="#general-pane"
+                      type="button" role="tab" aria-controls="general-pane"
+                      aria-selected="true">
+                General
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="headers-tab"
+                      data-bs-toggle="tab" data-bs-target="#headers-pane"
+                      type="button" role="tab" aria-controls="headers-pane"
+                      aria-selected="false">
+                Visible Headers
+              </button>
+            </li>
+          </ul>
+
+          {# Tab panes #}
+          <div class="tab-content pt-3">
+            <div class="tab-pane fade show active" id="general-pane" role="tabpanel" aria-labelledby="general-tab">
+              <input type="hidden" id="crewCheckIdInput" name="crew_check_id">
+
+              <div class="mb-3">
+                <label for="checkNameInput" class="form-label">Check Name</label>
+                <input type="text" class="form-control" id="checkNameInput" name="name" required>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Assign to Roles</label>
+                <div class="row">
+                  {% for role in roles %}
                     <div class="col-md-4">
                       <div class="form-check">
-                        <input class="form-check-input role-checkbox" type="checkbox" name="roles" value="{{ role.roleID }}" id="role{{ role.roleID }}">
+                        <input class="form-check-input role-checkbox"
+                               id="role{{ role.roleID }}"
+                               name="roles"
+                               type="checkbox"
+                               value="{{ role.roleID }}">
                         <label class="form-check-label" for="role{{ role.roleID }}">{{ role.role_name }}</label>
                       </div>
                     </div>
-                    {% endfor %}
-                  </div>
-                </div>
-              </div>
-  
-              <!-- Headers Tab -->
-              <div class="tab-pane fade" id="headersTab" role="tabpanel">
-                <div class="mb-3">
-                  <label class="form-label">Select which fields to show in the form:</label>
-                  <div class="row">
-                    {% for field_key, field_label in all_fields %}
-                    <div class="col-md-4">
-                      <div class="form-check">
-                        <input class="form-check-input header-checkbox" type="checkbox" name="headers" value="{{ field_key }}" id="header{{ field_key }}">
-                        <label class="form-check-label" for="header{{ field_key }}">{{ field_label }}</label>
-                      </div>
-                    </div>
-                    {% endfor %}
-                  </div>
+                  {% endfor %}
                 </div>
               </div>
             </div>
+
+            <div class="tab-pane fade" id="headers-pane" role="tabpanel" aria-labelledby="headers-tab">
+              <label class="form-label mb-2">Visible Headers</label>
+              <div class="row">
+                {% for header in all_fields %}
+                {% set key   = header.key   if header.key   is defined else header[0] %}
+                {% set label = header.label if header.label is defined else header[1] %}
+              
+                <div class="col-md-6 mb-2">
+                  <div class="form-check">
+                    <input
+                      class="form-check-input header-checkbox"
+                      id="header{{ key }}"
+                      name="headers"
+                      type="checkbox"
+                      value="{{ key }}"
+                      {% if key in ['test_result', 'next_check_due'] %}checked readonly onclick="return false;"{% endif %}>
+                    <label class="form-check-label" for="header{{ key }}">{{ label }}</label>
+              
+                    {# Hidden fallback input to ensure it's submitted #}
+                    {% if key in ['test_result', 'next_check_due'] %}
+                      <input type="hidden" name="headers" value="{{ key }}">
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+              </div>
+            </div>
           </div>
-  
-          <!-- Footer -->
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn btn-warning">Save Changes</button>
-          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
         </div>
       </form>
     </div>
   </div>
-  
+</div>
 
-  <script>
-    function openEditModal(checkId, checkName, assignedRoles, selectedHeaders = []) {
-        const form = document.getElementById("editCrewCheckForm");
-        form.action = `/edit_crew_check/${checkId}`;
+{# Archive Crew Check Modal #}
+<div class="modal fade" id="archiveModal" tabindex="-1" aria-labelledby="archiveModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="archiveForm" method="post" action="">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="archiveModalLabel">Archive Crew Check</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p>
+            This check “<strong id="archiveName"></strong>” has completed forms.<br>
+            It will be <strong>archived</strong> rather than deleted.<br>
+            Continue?
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-warning">Archive</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{# Edit Crew Check Modal #}
+<div class="modal fade" id="editCrewCheckModal" tabindex="-1" aria-labelledby="editCrewCheckLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form id="editCrewCheckForm" method="post">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editCrewCheckLabel">✏️ Edit Crew Check</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
 
-        document.getElementById("crewCheckIdInput").value = checkId;
-        document.getElementById("checkNameInput").value = checkName;
+          {# Nav tabs #}
+          <ul class="nav nav-tabs" id="editCrewCheckTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="general-tab"
+                      data-bs-toggle="tab" data-bs-target="#general-pane"
+                      type="button" role="tab" aria-controls="general-pane"
+                      aria-selected="true">
+                General
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="headers-tab"
+                      data-bs-toggle="tab" data-bs-target="#headers-pane"
+                      type="button" role="tab" aria-controls="headers-pane"
+                      aria-selected="false">
+                Visible Headers
+              </button>
+            </li>
+          </ul>
 
-        document.querySelectorAll(".role-checkbox").forEach(cb => cb.checked = false);
-        assignedRoles.forEach(roleId => {
-            const checkbox = document.getElementById(`role${roleId}`);
-            if (checkbox) checkbox.checked = true;
-        });
+          {# Tab panes #}
+          <div class="tab-content pt-3">
+            <div class="tab-pane fade show active" id="general-pane" role="tabpanel" aria-labelledby="general-tab">
+              <input type="hidden" id="crewCheckIdInput" name="crew_check_id">
 
-        // Reset all header checkboxes
-        document.querySelectorAll(".header-checkbox").forEach(cb => cb.checked = false);
-        selectedHeaders.forEach(header => {
-            const checkbox = document.getElementById(`header${header}`);
-            if (checkbox) checkbox.checked = true;
-        });
+              <div class="mb-3">
+                <label for="checkNameInput" class="form-label">Check Name</label>
+                <input type="text" class="form-control" id="checkNameInput" name="name" required>
+              </div>
 
-        const modal = new bootstrap.Modal(document.getElementById('editCrewCheckModal'));
-        modal.show();
-    }
-    </script>
-    
+              <div class="mb-3">
+                <label class="form-label">Assign to Roles</label>
+                <div class="row">
+                  {% for role in roles %}
+                    <div class="col-md-4">
+                      <div class="form-check">
+                        <input class="form-check-input role-checkbox"
+                               id="role{{ role.roleID }}"
+                               name="roles"
+                               type="checkbox"
+                               value="{{ role.roleID }}">
+                        <label class="form-check-label" for="role{{ role.roleID }}">{{ role.role_name }}</label>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="headers-pane" role="tabpanel" aria-labelledby="headers-tab">
+              <label class="form-label mb-2">Visible Headers</label>
+              <div class="row">
+                {% for header in all_fields %}
+                {% set key   = header.key   if header.key   is defined else header[0] %}
+                {% set label = header.label if header.label is defined else header[1] %}
+              
+                <div class="col-md-6 mb-2">
+                  <div class="form-check">
+                    <input
+                      class="form-check-input header-checkbox"
+                      id="header{{ key }}"
+                      name="headers"
+                      type="checkbox"
+                      value="{{ key }}"
+                      {% if key in ['test_result', 'next_check_due'] %}checked readonly onclick="return false;"{% endif %}>
+                    <label class="form-check-label" for="header{{ key }}">{{ label }}</label>
+              
+                    {# Hidden fallback input to ensure it's submitted #}
+                    {% if key in ['test_result', 'next_check_due'] %}
+                      <input type="hidden" name="headers" value="{{ key }}">
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}                        
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# Archive Crew Check Modal #}
+<div class="modal fade" id="archiveModal" tabindex="-1" aria-labelledby="archiveModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="archiveForm" method="post" action="">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="archiveModalLabel">Archive Crew Check</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p>
+            This check “<strong id="archiveName"></strong>” has completed forms.<br>
+            It will be <strong>archived</strong> rather than deleted.<br>
+            Continue?
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-warning">Archive</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# Create Crew Check Modal #}
+<div class="modal fade" id="createCrewCheckModal" tabindex="-1" aria-labelledby="createCrewCheckLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form id="createCrewCheckForm" method="post" action="{{ url_for('crew_checks.create_crew_check') }}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="createCrewCheckLabel">➕ Create Crew Check</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+
+          <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active"
+                      data-bs-toggle="tab"
+                      data-bs-target="#create-general"
+                      type="button"
+                      role="tab">
+                General
+              </button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button id="create-headers-tab"
+                      class="nav-link" 
+                      data-bs-toggle="tab" 
+                      data-bs-target="#create-headers" 
+                      type="button" role="tab">
+                Visible Headers
+              </button>
+            </li>
+          </ul>
+
+          <div class="tab-content pt-3">
+            <div class="tab-pane fade show active" id="create-general" role="tabpanel">
+              <div class="mb-3">
+                <label for="createNameInput" class="form-label">Check Name</label>
+                <input type="text" class="form-control" id="createNameInput" name="name" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Assign to Roles</label>
+                <div class="row">
+                  {% for role in roles %}
+                    <div class="col-md-4">
+                      <div class="form-check">
+                        <input class="form-check-input role-checkbox"
+                               id="createRole{{ role.roleID }}"
+                               name="roles"
+                               type="checkbox"
+                               value="{{ role.roleID }}">
+                        <label class="form-check-label" for="createRole{{ role.roleID }}">{{ role.role_name }}</label>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+
+            <div class="tab-pane fade" id="create-headers" role="tabpanel">
+              <label class="form-label mb-2">Visible Headers</label>
+              <div class="row">
+                {% for header in all_fields %}
+                {% set key   = header.key   if header.key   is defined else header[0] %}
+                {% set label = header.label if header.label is defined else header[1] %}
+              
+                <div class="col-md-6 mb-2">
+                  <div class="form-check">
+                    <input
+                      class="form-check-input header-checkbox"
+                      id="header{{ key }}"
+                      name="headers"
+                      type="checkbox"
+                      value="{{ key }}"
+                      {% if key in ['test_result', 'next_check_due'] %}checked readonly onclick="return false;"{% endif %}>
+                    <label class="form-check-label" for="header{{ key }}">{{ label }}</label>
+              
+                    {# Hidden fallback input to ensure it's submitted #}
+                    {% if key in ['test_result', 'next_check_due'] %}
+                      <input type="hidden" name="headers" value="{{ key }}">
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}                         
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit"
+          class="btn btn-primary"
+          id="createSubmitBtn"
+          disabled>
+          Create
+          </button>
+          <small id="headerHelp" class="form-text text-danger d-none">
+            Please select at least one visible header to enable Create
+          </small>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
+
+{% block scripts %}
+<script>
+
+  // 1) Define the function first
+  function openEditModal(id, name, roles, headers) {
+    const form = document.getElementById("editCrewCheckForm");
+    form.action = `/edit_crew_check/${id}`;
+    document.getElementById("crewCheckIdInput").value = id;
+    document.getElementById("checkNameInput").value   = name;
+
+    // Add these at the start of the openEditModal function
+    if (!headers.includes('test_result')) headers.push('test_result');
+    if (!headers.includes('next_check_due')) headers.push('next_check_due');
+
+    // clear all role checkboxes
+    document.querySelectorAll(".role-checkbox").forEach(cb => cb.checked = false);
+    // set only the selected ones
+    roles.forEach(r => {
+      const el = document.getElementById(`role${r}`);
+      if (el) el.checked = true;
+    });
+
+    // clear all header checkboxes
+    document.querySelectorAll(".header-checkbox").forEach(cb => cb.checked = false);
+    // set only the selected ones
+    headers.forEach(h => {
+      const el = document.getElementById(`header${h}`);
+      if (el) el.checked = true;
+    });
+
+    new bootstrap.Modal(document.getElementById('editCrewCheckModal')).show();
+  }
+
+  // 2) Wire up your buttons
+  document.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+
+      const id      = btn.dataset.id;
+      const name    = JSON.parse(btn.dataset.name);
+      const roles   = JSON.parse(btn.dataset.roles);
+      const headers = JSON.parse(btn.dataset.headers);
+
+      console.log({ id, name, roles, headers });
+      openEditModal(id, name, roles, headers);
+    });
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+  const form             = document.getElementById('createCrewCheckForm');
+  const submitBtn        = document.getElementById('createSubmitBtn');
+  const headerHelp       = document.getElementById('headerHelp');
+  const headerTabTrigger = document.getElementById('create-headers-tab');
+  const headers          = document.querySelectorAll('.header-checkbox');
+
+  function updateSubmitState() {
+    const anyChecked = Array.from(headers).some(cb => cb.checked);
+
+    // Toggle button
+    submitBtn.disabled = !anyChecked;
+
+    // Toggle help text
+    // if button is disabled → show the help text; otherwise hide it
+    headerHelp.classList.toggle('d-none', anyChecked);
+  }
+
+  headers.forEach(cb => cb.addEventListener('change', updateSubmitState));
+  updateSubmitState(); // initialize on page load
+
+  // final guard on form submit
+  form.addEventListener('submit', e => {
+    const anyChecked = Array.from(headers).some(cb => cb.checked);
+    if (!anyChecked) {
+      e.preventDefault();
+      headerTabTrigger.click();
+      headerTabTrigger.focus();
+    }
+  });
+});
+
+  </script>
+{% endblock %}
+
+
+

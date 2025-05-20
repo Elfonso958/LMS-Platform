@@ -320,6 +320,11 @@ def save_sector():
     missing_fields = [field for field in required_fields if field not in data]
     if missing_fields:
         return jsonify({'error': f'Missing required fields: {", ".join(missing_fields)}'}), 400
+    if len(data['departure']) != 3 or not data['departure'].isalpha():
+        return jsonify({'error': 'Invalid departure code. Must be 3 letters.'}), 400
+
+    if len(data['arrival']) != 3 or not data['arrival'].isalpha():
+        return jsonify({'error': 'Invalid arrival code. Must be 3 letters.'}), 400
 
     try:
         # Fetch the form and validate
@@ -534,22 +539,48 @@ def update_task():
 @admin_required
 def edit_line_training_form(form_id):
     form = LineTrainingForm.query.get_or_404(form_id)
-    roles = RoleType.query.all()  # Get all roles from the RoleType table
-    
+    roles = RoleType.query.all()
+
     # Create the FlaskForm
     edit_form = LineTrainingFormEditForm(obj=form)
     edit_form.roles.choices = [(role.roleID, role.role_name) for role in roles]
 
+    # POST: Handle form submission
     if request.method == 'POST' and edit_form.validate_on_submit():
-        form.name = edit_form.name.data  # Update the form name
-        selected_roles = edit_form.roles.data  # Get selected roles
+        form.name = edit_form.name.data
+        selected_roles = edit_form.roles.data
         form.roles = [RoleType.query.get(role_id) for role_id in selected_roles]
-        
+
+        # Store thresholds as comma-separated strings
+        form.threshold_total_sectors = ",".join(filter(None, edit_form.threshold_total_sectors.data))
+        form.threshold_total_hours = ",".join(filter(None, edit_form.threshold_total_hours.data))
+
         db.session.commit()
         flash('Line Training Form updated successfully!', 'success')
         return redirect(url_for('crew_checks.crew_checks_dashboard'))
 
+    # GET: Populate threshold fields as FieldList entries
+    if request.method == 'GET':
+        # Populate currently assigned roles
+        edit_form.roles.data = [role.roleID for role in form.roles]
+
+        # Also repopulate the sector/hour thresholds if needed
+        edit_form.threshold_total_sectors.entries = []
+        for val in (form.threshold_total_sectors or '').split(','):
+            if val.strip():
+                edit_form.threshold_total_sectors.append_entry(val.strip())
+        else:
+            edit_form.threshold_total_sectors.append_entry("")
+
+        edit_form.threshold_total_hours.entries = []
+        for val in (form.threshold_total_hours or '').split(','):
+            if val.strip():
+                edit_form.threshold_total_hours.append_entry(val.strip())
+        else:
+            edit_form.threshold_total_hours.append_entry("")
+
     return render_template('Line_Training_Forms/edit_line_training_form.html', form=edit_form, roles=roles)
+
 
 
 @linetraining_bp.route('/update_totals', methods=['POST'])
@@ -578,23 +609,44 @@ def update_totals():
         # Log the updated totals
         current_app.logger.info(f"Form ID {form_id}: Updated totals - Sectors={total_sectors}, Hours={total_hours}")
 
-        # Send email if threshold is exceeded
-        if total_sectors > 10:
-            send_email_to_training_team(mail, current_app._get_current_object(), form_id, total_sectors, total_hours)
+        # === Get thresholds from LineTrainingForm template ===
+        template = form.template
+        sector_thresholds = []
+        hour_thresholds = []
+
+        if template.threshold_total_sectors:
+            sector_thresholds = [
+                int(s.strip()) for s in template.threshold_total_sectors.split(",") if s.strip().isdigit()
+            ]
+        if template.threshold_total_hours:
+            hour_thresholds = [
+                float(h.strip()) for h in template.threshold_total_hours.split(",") if h.strip()
+            ]
+
+        # === Check if any threshold is exceeded ===
+        threshold_exceeded = any(total_sectors >= s for s in sector_thresholds) or \
+                             any(total_hours >= h for h in hour_thresholds)
+
+        if threshold_exceeded:
+            send_email_to_training_team(
+                mail, current_app._get_current_object(),
+                form_id, total_sectors, total_hours
+            )
 
         # Return updated totals to the frontend
         return jsonify({
             'success': True,
             'total_sectors': total_sectors,
-            'total_hours': round(total_hours, 2)  # Round total hours for clarity
+            'total_hours': round(total_hours, 2)
         }), 200
+
     except ValueError as ve:
         current_app.logger.error(f"Validation error: {ve}")
         return jsonify({'success': False, 'error': str(ve)}), 400
     except Exception as e:
-        # Log and return the error response
         current_app.logger.error(f"Error in /update_totals: {e}")
         return jsonify({'success': False, 'error': "An unexpected error occurred."}), 500
+
 
 @linetraining_bp.route('/release_candidate/<int:form_id>', methods=['POST'])
 @login_required
